@@ -101,7 +101,8 @@ Go to chrome://extensions/
 Click the Reload button on the SpoilerShield extension.
 
 <h1>Demo Video Link</h1>
-https://drive.google.com/file/d/17EbktEgmNhUsPc-n9RzDSsazzRdzbg7H/view?usp=drive_link
+https://drive.google.com/drive/folders/1bC0LwYNuZc7h_4aIOetPdpM6yDbbPgJt?usp=drive_link
+
 
 <h1>Team Members</h1>
 
