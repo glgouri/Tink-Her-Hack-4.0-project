@@ -1,308 +1,672 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SpoilerShield</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SpoilerShield</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg0:         #05050a;
+    --bg1:         #0b0b14;
+    --bg2:         #10101e;
+    --bg3:         #161626;
+    --border:      rgba(0, 240, 255, 0.10);
+    --border-hot:  rgba(0, 240, 255, 0.45);
+    --cyan:        #00f0ff;
+    --cyan-dim:    rgba(0, 240, 255, 0.55);
+    --cyan-glow:   rgba(0, 240, 255, 0.13);
+    --purple:      #bf5fff;
+    --purple-dim:  rgba(191, 95, 255, 0.55);
+    --purple-glow: rgba(191, 95, 255, 0.11);
+    --red:         #ff3c6e;
+    --green:       #39ff8f;
+    --yt:          #ff4444;
+    --yt-glow:     rgba(255, 68, 68, 0.13);
+    --rd:          #ff6530;
+    --rd-glow:     rgba(255, 101, 48, 0.13);
+    --tw:          #1d9bf0;
+    --tw-glow:     rgba(29, 155, 240, 0.13);
+    --text0:       #e8eaf6;
+    --text1:       #9799b5;
+    --text2:       #4a4c6a;
+    --font-mono:   'Share Tech Mono', monospace;
+    --font-head:   'Orbitron', sans-serif;
+    --font-body:   'Rajdhani', sans-serif;
+  }
 
-    :root {
-      --bg:          #0d0d0f;
-      --surface:     #16161a;
-      --border:      #2a2a30;
-      --accent:      #ff4b4b;
-      --accent-lo:   rgba(255,75,75,0.12);
-      --show-color:  #7c6af7;           /* purple — distinct from keyword red */
-      --show-lo:     rgba(124,106,247,0.13);
-      --text:        #e8e8ee;
-      --muted:       #6c6c7e;
-      --success:     #3ecf8e;
-      --warning:     #f59e0b;
-      --radius:      10px;
-      --font:        'Courier New', monospace;
-    }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      width: 330px;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      display: flex;
-      flex-direction: column;
-    }
+  body {
+    width: 380px;
+    min-height: 560px;
+    background: var(--bg0);
+    font-family: var(--font-body);
+    color: var(--text0);
+    overflow-x: hidden;
+    position: relative;
+  }
 
-    /* ── Header ─────────────────────────────────────────────────── */
-    .header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 18px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .shield-icon {
-      width: 32px; height: 32px;
-      background: var(--accent);
-      border-radius: 8px;
-      display: grid; place-items: center;
-      font-size: 16px; flex-shrink: 0;
-      box-shadow: 0 0 18px rgba(255,75,75,0.4);
-    }
-    .header-text h1 {
-      font-size: 14px; font-weight: 700;
-      letter-spacing: 0.08em; text-transform: uppercase;
-    }
-    .header-text p { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
+  /* Grid BG */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,240,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,0.025) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none; z-index: 0;
+    animation: gridDrift 20s linear infinite;
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 220px 160px at 50% -20%, rgba(0,240,255,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 180px 140px at 110% 60%, rgba(191,95,255,0.05) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  @keyframes gridDrift {
+    from { background-position: 0 0, 0 0; }
+    to   { background-position: 28px 28px, 28px 28px; }
+  }
 
-    /* ── Toggle Row ─────────────────────────────────────────────── */
-    .toggle-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-    }
-    .toggle-label { font-size: 11px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
-    .toggle { position: relative; width: 40px; height: 22px; }
-    .toggle input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; inset: 0;
-      background: var(--border); border-radius: 22px;
-      cursor: pointer; transition: background 0.25s;
-    }
-    .slider::before {
-      content: ''; position: absolute;
-      width: 16px; height: 16px; left: 3px; top: 3px;
-      background: #fff; border-radius: 50%; transition: transform 0.25s;
-    }
-    .toggle input:checked + .slider { background: var(--accent); }
-    .toggle input:checked + .slider::before { transform: translateX(18px); }
+  .popup-wrap { position: relative; z-index: 1; display: flex; flex-direction: column; }
 
-    /* ── Sections ───────────────────────────────────────────────── */
-    .section {
-      padding: 14px 18px;
-      display: flex; flex-direction: column; gap: 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .section-label {
-      font-size: 10px; letter-spacing: 0.1em;
-      color: var(--muted); text-transform: uppercase;
-    }
-    /* Purple accent for the shows section label */
-    .section-label.shows { color: var(--show-color); }
+  /* ── Header ── */
+  .header {
+    padding: 16px 20px 13px;
+    background: linear-gradient(180deg, rgba(0,240,255,0.05) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute; left: 0; top: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    animation: scanLine 3s ease-in-out infinite;
+  }
+  @keyframes scanLine {
+    0%, 100% { opacity: 0; transform: scaleX(0.3); }
+    50%       { opacity: 1; transform: scaleX(1); }
+  }
+  .logo-group { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; }
+  .logo-icon svg {
+    width: 26px; height: 26px;
+    filter: drop-shadow(0 0 8px var(--cyan));
+    animation: iconPulse 2.5s ease-in-out infinite;
+  }
+  @keyframes iconPulse {
+    0%, 100% { filter: drop-shadow(0 0 5px var(--cyan)); }
+    50%       { filter: drop-shadow(0 0 14px var(--cyan)) drop-shadow(0 0 26px var(--cyan-dim)); }
+  }
+  .logo-name {
+    font-family: var(--font-head); font-size: 12px; font-weight: 900;
+    letter-spacing: 0.15em; color: var(--cyan);
+    text-shadow: 0 0 12px var(--cyan-dim), 0 0 26px rgba(0,240,255,0.25);
+    text-transform: uppercase; line-height: 1;
+  }
+  .logo-ver { font-family: var(--font-mono); font-size: 8px; color: var(--text2); letter-spacing: 0.1em; margin-top: 3px; }
 
-    /* ── API Key Row ─────────────────────────────────────────────── */
-    .api-key-row { display: flex; gap: 6px; align-items: center; }
-    .api-key-hint { font-size: 10px; color: var(--muted); letter-spacing: 0.03em; }
-    .api-key-hint a { color: var(--warning); text-decoration: none; }
+  /* Toggle */
+  .toggle-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  .toggle-label { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.15em; color: var(--text2); text-transform: uppercase; }
+  .toggle { position: relative; width: 44px; height: 22px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 11px;
+    cursor: pointer; transition: all 0.3s ease;
+  }
+  .toggle-track::before {
+    content: ''; position: absolute;
+    width: 16px; height: 16px; left: 3px; top: 2px;
+    background: var(--text2); border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .toggle input:checked + .toggle-track {
+    background: rgba(0,240,255,0.1); border-color: var(--cyan);
+    box-shadow: 0 0 10px rgba(0,240,255,0.25), inset 0 0 8px rgba(0,240,255,0.1);
+  }
+  .toggle input:checked + .toggle-track::before {
+    transform: translateX(22px); background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
+  }
 
-    /* ── Inputs ─────────────────────────────────────────────────── */
-    input[type="text"],
-    input[type="password"] {
-      flex: 1; min-width: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 12px;
-      padding: 8px 12px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    input[type="text"]:focus,
-    input[type="password"]:focus { border-color: var(--accent); }
-    /* Purple focus ring for the show input */
-    input.show-input:focus { border-color: var(--show-color); }
-    input::placeholder { color: var(--muted); }
+  /* ── Section Block ── */
+  .section { border-bottom: 1px solid var(--border); position: relative; }
 
-    /* ── Buttons ─────────────────────────────────────────────────── */
-    button {
-      background: var(--accent); border: none;
-      border-radius: var(--radius); color: #fff;
-      font-family: var(--font); font-size: 18px;
-      width: 36px; height: 36px;
-      cursor: pointer; display: grid; place-items: center; flex-shrink: 0;
-      transition: opacity 0.2s, transform 0.1s;
-    }
-    button:hover { opacity: 0.85; }
-    button:active { transform: scale(0.95); }
+  .section-head {
+    padding: 12px 20px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+    color: var(--text2); text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-title::before { content: '//'; color: var(--cyan); font-size: 10px; }
 
-    .btn-icon {
-      background: var(--surface); border: 1px solid var(--border);
-      font-size: 14px; width: 32px; height: 32px; color: var(--muted);
-    }
-    .btn-icon:hover { border-color: var(--accent); color: var(--text); }
+  .badge {
+    font-family: var(--font-mono); font-size: 9px;
+    border-radius: 10px; padding: 1px 8px; min-width: 22px; text-align: center;
+    transition: all 0.2s ease;
+  }
+  .badge-purple { background: var(--purple-glow); border: 1px solid var(--purple-dim); color: var(--purple); }
+  .badge-cyan   { background: var(--cyan-glow);   border: 1px solid var(--cyan-dim);   color: var(--cyan); }
 
-    .btn-text {
-      width: auto; padding: 0 14px;
-      font-size: 11px; letter-spacing: 0.05em; height: 36px;
-    }
+  /* ── Platform Tabs ── */
+  .platform-tabs {
+    display: flex; gap: 0;
+    padding: 10px 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ptab {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 5px 11px 7px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text2); position: relative;
+    transition: color 0.2s ease;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .ptab::after {
+    content: ''; position: absolute;
+    left: 0; right: 0; bottom: -1px; height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: transparent; transition: background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .ptab:hover { color: var(--text1); }
 
-    /* Purple add button for shows */
-    .btn-show {
-      background: var(--show-color);
-      font-size: 18px;
-    }
-    .btn-show:hover { opacity: 0.85; }
+  .ptab[data-plat="youtube"].active { color: var(--yt); }
+  .ptab[data-plat="youtube"].active::after { background: var(--yt); box-shadow: 0 0 8px var(--yt); }
+  .ptab[data-plat="reddit"].active  { color: var(--rd); }
+  .ptab[data-plat="reddit"].active::after  { background: var(--rd); box-shadow: 0 0 8px var(--rd); }
+  .ptab[data-plat="twitter"].active { color: var(--tw); }
+  .ptab[data-plat="twitter"].active::after { background: var(--tw); box-shadow: 0 0 8px var(--tw); }
 
-    /* ── Input Rows ─────────────────────────────────────────────── */
-    .input-row { display: flex; gap: 8px; }
+  .ptab-icon { font-size: 10px; }
+  .ptab-count {
+    font-size: 8px; padding: 0 4px; border-radius: 6px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+    color: var(--text2); min-width: 14px; text-align: center; transition: all 0.2s;
+  }
+  .ptab[data-plat="youtube"].active .ptab-count { background: var(--yt-glow); border-color: rgba(255,68,68,0.3);   color: var(--yt); }
+  .ptab[data-plat="reddit"].active  .ptab-count { background: var(--rd-glow); border-color: rgba(255,101,48,0.3); color: var(--rd); }
+  .ptab[data-plat="twitter"].active .ptab-count { background: var(--tw-glow); border-color: rgba(29,155,240,0.3); color: var(--tw); }
 
-    /* ── Tag Lists ──────────────────────────────────────────────── */
-    .tags {
-      display: flex; flex-wrap: wrap; gap: 6px;
-      min-height: 44px; max-height: 120px;
-      overflow-y: auto; padding: 2px 0;
-    }
-    .tags::-webkit-scrollbar { width: 4px; }
-    .tags::-webkit-scrollbar-track { background: transparent; }
-    .tags::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  /* ── Tab Panels ── */
+  .tab-panels { padding: 12px 20px 14px; }
+  .tab-panel { display: none; animation: panelFade 0.18s ease both; }
+  .tab-panel.active { display: block; }
+  @keyframes panelFade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* Red keyword tags */
-    .tag {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--accent-lo);
-      border: 1px solid rgba(255,75,75,0.3);
-      border-radius: 6px; padding: 4px 10px;
-      font-size: 11px;
-      animation: tagIn 0.2s ease;
-    }
+  /* ── Input Row ── */
+  .input-row { display: flex; gap: 6px; margin-bottom: 10px; }
 
-    /* Purple show tags */
-    .show-tag {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--show-lo);
-      border: 1px solid rgba(124,106,247,0.35);
-      border-radius: 6px; padding: 4px 10px;
-      font-size: 11px;
-      animation: tagIn 0.2s ease;
-    }
+  .cyber-input {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 7px 11px;
+    font-family: var(--font-mono); font-size: 11px; color: var(--text0);
+    outline: none; transition: all 0.25s ease;
+  }
+  .cyber-input::placeholder { color: var(--text2); font-size: 10px; letter-spacing: 0.04em; }
 
-    @keyframes tagIn {
-      from { opacity: 0; transform: scale(0.85); }
-      to   { opacity: 1; transform: scale(1); }
-    }
+  .tab-panel[data-plat="youtube"] .cyber-input:focus {
+    border-color: var(--yt); background: rgba(255,68,68,0.04);
+    box-shadow: 0 0 0 1px rgba(255,68,68,0.15), 0 0 14px rgba(255,68,68,0.07);
+  }
+  .tab-panel[data-plat="reddit"] .cyber-input:focus {
+    border-color: var(--rd); background: rgba(255,101,48,0.04);
+    box-shadow: 0 0 0 1px rgba(255,101,48,0.15), 0 0 14px rgba(255,101,48,0.07);
+  }
+  .tab-panel[data-plat="twitter"] .cyber-input:focus {
+    border-color: var(--tw); background: rgba(29,155,240,0.04);
+    box-shadow: 0 0 0 1px rgba(29,155,240,0.15), 0 0 14px rgba(29,155,240,0.07);
+  }
 
-    .tag-del, .show-del {
-      background: none; border: none;
-      font-size: 14px; cursor: pointer;
-      width: auto; height: auto; padding: 0; line-height: 1; opacity: 0.7;
-    }
-    .tag-del  { color: var(--accent); }
-    .show-del { color: var(--show-color); }
-    .tag-del:hover, .show-del:hover { opacity: 1; }
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; border: none; border-radius: 4px;
+    cursor: pointer; padding: 0 13px; height: 32px;
+    transition: all 0.2s ease; white-space: nowrap;
+    position: relative; overflow: hidden;
+  }
+  .btn::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg,rgba(255,255,255,0.07) 0%,transparent 60%); pointer-events: none; }
+  .btn:active { transform: translateY(0) scale(0.97) !important; }
 
-    .empty-state {
-      font-size: 11px; color: var(--muted);
-      text-align: center; padding: 10px 0; letter-spacing: 0.03em;
-    }
+  .btn-yt { background: rgba(255,68,68,0.1);   border: 1px solid rgba(255,68,68,0.4);   color: var(--yt); }
+  .btn-yt:hover { background: rgba(255,68,68,0.19); border-color: var(--yt); box-shadow: 0 0 12px rgba(255,68,68,0.25); transform: translateY(-1px); }
 
-    /* ── Show count badge ───────────────────────────────────────── */
-    .show-count {
-      display: inline-block;
-      background: var(--show-lo);
-      border: 1px solid rgba(124,106,247,0.3);
-      border-radius: 20px;
-      padding: 1px 8px;
-      font-size: 9px;
-      color: var(--show-color);
-      letter-spacing: 0.05em;
-      margin-left: 6px;
-      vertical-align: middle;
-    }
+  .btn-rd { background: rgba(255,101,48,0.1);  border: 1px solid rgba(255,101,48,0.4);  color: var(--rd); }
+  .btn-rd:hover { background: rgba(255,101,48,0.19); border-color: var(--rd); box-shadow: 0 0 12px rgba(255,101,48,0.25); transform: translateY(-1px); }
 
-    /* ── Status Bar ─────────────────────────────────────────────── */
-    .status {
-      padding: 10px 18px;
-      font-size: 10px; letter-spacing: 0.05em;
-      color: var(--muted); text-align: center;
-    }
-    .status.saved { color: var(--success); }
-    .status.error { color: var(--accent); }
-  </style>
+  .btn-tw { background: rgba(29,155,240,0.1);  border: 1px solid rgba(29,155,240,0.4);  color: var(--tw); }
+  .btn-tw:hover { background: rgba(29,155,240,0.19); border-color: var(--tw); box-shadow: 0 0 12px rgba(29,155,240,0.25); transform: translateY(-1px); }
+
+  /* ── Tags ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 14px; }
+  .empty-msg { font-family: var(--font-mono); font-size: 9px; color: var(--text2); letter-spacing: 0.07em; font-style: italic; }
+
+  .tag, .show-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 3px; padding: 3px 5px 3px 8px;
+    font-family: var(--font-mono); font-size: 10px;
+    animation: tagPop 0.22s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes tagPop { from { opacity:0; transform: scale(0.7) translateY(4px); } to { opacity:1; transform: scale(1) translateY(0); } }
+
+  .tag-yt, .show-tag-yt { background: var(--yt-glow); border: 1px solid rgba(255,68,68,0.25);   color: var(--yt); }
+  .tag-rd, .show-tag-rd { background: var(--rd-glow); border: 1px solid rgba(255,101,48,0.25); color: var(--rd); }
+  .tag-tw, .show-tag-tw { background: var(--tw-glow); border: 1px solid rgba(29,155,240,0.25); color: var(--tw); }
+
+  .tag-del, .show-del {
+    background: none; border: none; cursor: pointer; color: inherit;
+    opacity: 0.4; font-size: 13px; line-height: 1; padding: 0 2px;
+    transition: opacity 0.15s, color 0.15s; display: flex; align-items: center;
+  }
+  .tag-del:hover, .show-del:hover { opacity: 1; color: var(--red); }
+
+  /* ── Status Bar ── */
+  .status-bar {
+    padding: 8px 20px; background: var(--bg1);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    position: relative; overflow: hidden;
+  }
+  .status-bar::before {
+    content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,240,255,0.12), transparent);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); flex-shrink: 0; transition: all 0.3s ease; }
+  .status-bar.saved .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: dotBlink 0.6s ease-in-out 2; }
+  .status-bar.error .status-dot { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+  @keyframes dotBlink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .status-text { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: var(--text1); transition: color 0.3s; }
+  .status-bar.saved .status-text { color: var(--green); }
+  .status-bar.error .status-text { color: var(--red); }
+
+  .shield-disabled .section { opacity: 0.3; pointer-events: none; transition: opacity 0.35s ease; }
+
+  .powered { padding: 6px 20px 9px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+  .powered-text { font-family: var(--font-mono); font-size: 8px; color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase; }
+
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
 </head>
 <body>
+<div class="popup-wrap" id="popupRoot">
 
-  <!-- ── Header ──────────────────────────────────────────────────────── -->
-  <div class="header">
-    <div class="shield-icon">🛡</div>
-    <div class="header-text">
-      <h1>SpoilerShield</h1>
-      <p>YouTube · Twitter/X · Reddit</p>
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="logo-group">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L3 6V12C3 16.97 7.02 21.64 12 23C16.98 21.64 21 16.97 21 12V6L12 2Z"
+                stroke="#00f0ff" stroke-width="1.5" stroke-linejoin="round" fill="rgba(0,240,255,0.08)"/>
+          <path d="M9 12L11 14L15 10" stroke="#00f0ff" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-name">SpoilerShield</div>
+        <div class="logo-ver">v3.0 // PLATFORM-AWARE DETECTION</div>
+      </div>
+    </div>
+    <div class="toggle-wrap">
+      <div class="toggle-label">Shield</div>
+      <label class="toggle">
+        <input type="checkbox" id="enabledToggle" checked />
+        <div class="toggle-track"></div>
+      </label>
+    </div>
+  </header>
+
+  <!-- ── PROTECTED SHOWS ── -->
+  <div class="section" id="showsSection">
+    <div class="section-head">
+      <div class="section-title">Protected Shows</div>
+      <span class="badge badge-purple" id="showTotalCount">0</span>
+    </div>
+
+    <div class="platform-tabs" id="showTabs">
+      <button class="ptab active" data-plat="youtube" data-section="shows">
+        <span class="ptab-icon">▶</span> YouTube
+        <span class="ptab-count" id="show-yt-count">0</span>
+      </button>
+      <button class="ptab" data-plat="reddit" data-section="shows">
+        <span class="ptab-icon">👾</span> Reddit
+        <span class="ptab-count" id="show-rd-count">0</span>
+      </button>
+      <button class="ptab" data-plat="twitter" data-section="shows">
+        <span class="ptab-icon">✦</span> Twitter/X
+        <span class="ptab-count" id="show-tw-count">0</span>
+      </button>
+    </div>
+
+    <div class="tab-panels" id="show-panels">
+      <!-- YouTube -->
+      <div class="tab-panel active" data-plat="youtube" data-section="shows">
+        <div class="input-row">
+          <input class="cyber-input" id="show-input-youtube" type="text"
+                 placeholder="e.g. Breaking Bad" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-yt" data-plat="youtube" data-section="shows">+ Add</button>
+        </div>
+        <div class="tag-list" id="show-list-youtube">
+          <span class="empty-msg">no shows — add one above</span>
+        </div>
+      </div>
+      <!-- Reddit -->
+      <div class="tab-panel" data-plat="reddit" data-section="shows">
+        <div class="input-row">
+          <input class="cyber-input" id="show-input-reddit" type="text"
+                 placeholder="e.g. Succession" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-rd" data-plat="reddit" data-section="shows">+ Add</button>
+        </div>
+        <div class="tag-list" id="show-list-reddit">
+          <span class="empty-msg">no shows — add one above</span>
+        </div>
+      </div>
+      <!-- Twitter -->
+      <div class="tab-panel" data-plat="twitter" data-section="shows">
+        <div class="input-row">
+          <input class="cyber-input" id="show-input-twitter" type="text"
+                 placeholder="e.g. The Bear" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-tw" data-plat="twitter" data-section="shows">+ Add</button>
+        </div>
+        <div class="tag-list" id="show-list-twitter">
+          <span class="empty-msg">no shows — add one above</span>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- ── Shield Toggle ───────────────────────────────────────────────── -->
-  <div class="toggle-row">
-    <span class="toggle-label">Shield Active</span>
-    <label class="toggle">
-      <input type="checkbox" id="enabledToggle" checked />
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <!-- ── Gemini API Key ───────────────────────────────────────────────── -->
-  <div class="section">
-    <span class="section-label">Gemini API Key</span>
-    <div class="api-key-row">
-      <input type="password" id="apiKeyInput" placeholder="AIza…" autocomplete="off" spellcheck="false" />
-      <button class="btn-icon" id="toggleApiVis" title="Show / hide key">👁</button>
-      <button class="btn-text" id="saveApiKeyBtn" title="Save API key">Save</button>
-    </div>
-    <p class="api-key-hint">
-      Get a free key at
-      <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>
-    </p>
-  </div>
-
-  <!-- ── ✨ NEW: Protected Shows ──────────────────────────────────────── -->
-  <!--
-    This is the main new feature.
-    The user types a show or movie name they haven't watched yet.
-    The extension monitors all posts and blurs any that mention this show
-    AND contain spoiler content according to Gemini.
-  -->
-  <div class="section">
-    <span class="section-label shows">
-      🎬 Protected Shows
-      <span class="show-count" id="showCount">0</span>
-    </span>
-
-    <div class="input-row">
-      <input
-        type="text"
-        id="showInput"
-        class="show-input"
-        placeholder="e.g. Breaking Bad, Oppenheimer…"
-        maxlength="80"
-      />
-      <button class="btn-show" id="addShowBtn" title="Add show">+</button>
+  <!-- ── KEYWORDS ── -->
+  <div class="section" id="keywordsSection">
+    <div class="section-head">
+      <div class="section-title">Keywords</div>
+      <span class="badge badge-cyan" id="kwTotalCount">0</span>
     </div>
 
-    <!-- Show tags render here -->
-    <div class="tags" id="showList">
-      <span class="empty-state" id="showEmptyMsg">
-        No shows protected yet. Add a show above.
-      </span>
+    <div class="platform-tabs" id="kwTabs">
+      <button class="ptab active" data-plat="youtube" data-section="kw">
+        <span class="ptab-icon">▶</span> YouTube
+        <span class="ptab-count" id="kw-yt-count">0</span>
+      </button>
+      <button class="ptab" data-plat="reddit" data-section="kw">
+        <span class="ptab-icon">👾</span> Reddit
+        <span class="ptab-count" id="kw-rd-count">0</span>
+      </button>
+      <button class="ptab" data-plat="twitter" data-section="kw">
+        <span class="ptab-icon">✦</span> Twitter/X
+        <span class="ptab-count" id="kw-tw-count">0</span>
+      </button>
     </div>
-  </div>
-  <!-- ── END Protected Shows ─────────────────────────────────────────── -->
 
-  <!-- ── Extra Keywords (optional fallback) ──────────────────────────── -->
-  <div class="section">
-    <span class="section-label">Extra Keywords <span style="color:var(--muted);font-size:9px">(optional)</span></span>
-    <div class="input-row">
-      <input type="text" id="keywordInput" placeholder="e.g. episode 10, finale…" maxlength="60" />
-      <button id="addBtn" title="Add keyword">+</button>
-    </div>
-    <div class="tags" id="tagList">
-      <span class="empty-state" id="emptyMsg">No extra keywords added.</span>
+    <div class="tab-panels" id="kw-panels">
+      <!-- YouTube -->
+      <div class="tab-panel active" data-plat="youtube" data-section="kw">
+        <div class="input-row">
+          <input class="cyber-input" id="kw-input-youtube" type="text"
+                 placeholder="e.g. season finale" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-yt" data-plat="youtube" data-section="kw">+ Add</button>
+        </div>
+        <div class="tag-list" id="kw-list-youtube">
+          <span class="empty-msg">no keywords — add one above</span>
+        </div>
+      </div>
+      <!-- Reddit -->
+      <div class="tab-panel" data-plat="reddit" data-section="kw">
+        <div class="input-row">
+          <input class="cyber-input" id="kw-input-reddit" type="text"
+                 placeholder="e.g. episode spoiler" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-rd" data-plat="reddit" data-section="kw">+ Add</button>
+        </div>
+        <div class="tag-list" id="kw-list-reddit">
+          <span class="empty-msg">no keywords — add one above</span>
+        </div>
+      </div>
+      <!-- Twitter -->
+      <div class="tab-panel" data-plat="twitter" data-section="kw">
+        <div class="input-row">
+          <input class="cyber-input" id="kw-input-twitter" type="text"
+                 placeholder="e.g. plot twist" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-tw" data-plat="twitter" data-section="kw">+ Add</button>
+        </div>
+        <div class="tag-list" id="kw-list-twitter">
+          <span class="empty-msg">no keywords — add one above</span>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="status" id="statusBar">Ready</div>
+  <!-- ── Status Bar ── -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot"></div>
+    <div class="status-text" id="statusText">READY</div>
+  </div>
 
-  <script src="popup.js"></script>
+  <div class="powered">
+    <span style="font-size:9px;opacity:0.35">✦</span>
+    <span class="powered-text">SpoilerShield v3.0</span>
+  </div>
+
+</div>
+<script>
+'use strict';
+
+const PLATFORMS = ['youtube', 'reddit', 'twitter'];
+
+// Per-platform state
+const state = {
+  shows:    { youtube: [], reddit: [], twitter: [] },
+  keywords: { youtube: [], reddit: [], twitter: [] },
+};
+
+let statusTimer = null;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function titleCase(s) { return s.replace(/\b\w/g, c => c.toUpperCase()); }
+function platShort(p) { return p === 'youtube' ? 'yt' : p === 'reddit' ? 'rd' : 'tw'; }
+
+function showStatus(msg, type = 'saved') {
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status-bar ' + type;
+  document.getElementById('statusText').textContent = msg.toUpperCase();
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
+    bar.className = 'status-bar';
+    document.getElementById('statusText').textContent = 'READY';
+  }, 2000);
+}
+
+// ── Counts ───────────────────────────────────────────────────────────────────
+function updateCounts() {
+  let showTotal = 0, kwTotal = 0;
+  PLATFORMS.forEach(p => {
+    const ps = platShort(p);
+    const sn = state.shows[p].length;
+    const kn = state.keywords[p].length;
+    showTotal += sn; kwTotal += kn;
+    document.getElementById(`show-${ps}-count`).textContent = sn;
+    document.getElementById(`kw-${ps}-count`).textContent   = kn;
+  });
+  document.getElementById('showTotalCount').textContent = showTotal;
+  document.getElementById('kwTotalCount').textContent   = kwTotal;
+}
+
+// ── Render a single platform list ─────────────────────────────────────────────
+function renderList(section, plat) {
+  const isShows = section === 'shows';
+  const listEl  = document.getElementById(`${isShows ? 'show' : 'kw'}-list-${plat}`);
+  const items   = state[isShows ? 'shows' : 'keywords'][plat];
+  const ps      = platShort(plat);
+  const tagBase = isShows ? 'show-tag' : 'tag';
+  const delBase = isShows ? 'show-del' : 'tag-del';
+
+  listEl.innerHTML = '';
+
+  if (!items.length) {
+    listEl.innerHTML = '<span class="empty-msg">no entries — add one above</span>';
+    updateCounts();
+    return;
+  }
+
+  items.forEach((val, i) => {
+    const tag   = document.createElement('span');
+    tag.className = `${tagBase} ${tagBase}-${ps}`;
+    const label = isShows ? `🎬 ${escapeHtml(titleCase(val))}` : escapeHtml(val);
+    tag.innerHTML = `<span>${label}</span><button class="${delBase}" data-section="${section}" data-plat="${plat}" data-index="${i}" title="Remove">×</button>`;
+    listEl.appendChild(tag);
+  });
+
+  updateCounts();
+}
+
+function renderAll() {
+  PLATFORMS.forEach(p => { renderList('shows', p); renderList('keywords', p); });
+}
+
+// ── Add / Remove ──────────────────────────────────────────────────────────────
+function addItem(section, plat) {
+  const isShows = section === 'shows';
+  const input   = document.getElementById(`${isShows ? 'show' : 'kw'}-input-${plat}`);
+  const raw     = input.value.trim().toLowerCase();
+  if (!raw) return;
+
+  const arr = state[isShows ? 'shows' : 'keywords'][plat];
+  if (arr.includes(raw)) { showStatus('Already exists', 'error'); input.select(); return; }
+
+  arr.push(raw);
+  input.value = '';
+  renderList(section, plat);
+  persist();
+  showStatus(`"${raw}" added`, 'saved');
+}
+
+function removeItem(section, plat, index) {
+  const isShows = section === 'shows';
+  const arr     = state[isShows ? 'shows' : 'keywords'][plat];
+  const removed = arr.splice(index, 1)[0];
+  renderList(section, plat);
+  persist();
+  showStatus(`"${removed}" removed`, 'saved');
+}
+
+// ── Storage ───────────────────────────────────────────────────────────────────
+async function persist() {
+  const payload = {
+    showsByPlatform:    state.shows,
+    keywordsByPlatform: state.keywords,
+    enabled:            document.getElementById('enabledToggle').checked,
+  };
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      await chrome.storage.sync.set(payload);
+    } else {
+      localStorage.setItem('ss_v3', JSON.stringify(payload));
+    }
+  } catch (e) { showStatus('Save failed', 'error'); }
+}
+
+async function loadSettings() {
+  const defaults = {
+    showsByPlatform:    { youtube:[], reddit:[], twitter:[] },
+    keywordsByPlatform: { youtube:[], reddit:[], twitter:[] },
+    enabled: true,
+  };
+  try {
+    let data;
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      data = await chrome.storage.sync.get(defaults);
+    } else {
+      const raw = localStorage.getItem('ss_v3');
+      data = raw ? {...defaults, ...JSON.parse(raw)} : defaults;
+    }
+    state.shows    = data.showsByPlatform;
+    state.keywords = data.keywordsByPlatform;
+    document.getElementById('enabledToggle').checked = data.enabled;
+    updateShieldState(data.enabled);
+    renderAll();
+  } catch (e) { showStatus('Load error', 'error'); }
+}
+
+// ── Shield toggle ─────────────────────────────────────────────────────────────
+function updateShieldState(on) {
+  document.getElementById('popupRoot').classList.toggle('shield-disabled', !on);
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function setupTabs(tabsId, panelsId) {
+  document.getElementById(tabsId).addEventListener('click', e => {
+    const tab = e.target.closest('.ptab');
+    if (!tab) return;
+    const plat = tab.dataset.plat;
+
+    document.getElementById(tabsId).querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    document.getElementById(panelsId).querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(panelsId).querySelector(`[data-plat="${plat}"]`).classList.add('active');
+  });
+}
+
+// ── Event delegation ──────────────────────────────────────────────────────────
+// Add buttons inside panels
+document.querySelectorAll('.tab-panels .btn').forEach(btn => {
+  btn.addEventListener('click', () => addItem(btn.dataset.section, btn.dataset.plat));
+});
+
+// Enter key on inputs
+document.querySelectorAll('.cyber-input').forEach(input => {
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const panel = input.closest('.tab-panel');
+    if (!panel) return;
+    addItem(panel.dataset.section, panel.dataset.plat);
+  });
+});
+
+// Delete — shows
+document.getElementById('showsSection').addEventListener('click', e => {
+  const del = e.target.closest('.show-del');
+  if (del) removeItem('shows', del.dataset.plat, +del.dataset.index);
+});
+
+// Delete — keywords
+document.getElementById('keywordsSection').addEventListener('click', e => {
+  const del = e.target.closest('.tag-del');
+  if (del) removeItem('keywords', del.dataset.plat, +del.dataset.index);
+});
+
+// Toggle
+document.getElementById('enabledToggle').addEventListener('change', e => {
+  updateShieldState(e.target.checked);
+  persist();
+  showStatus(e.target.checked ? 'Shield active' : 'Shield offline', e.target.checked ? 'saved' : 'error');
+});
+
+// ── Init tabs ─────────────────────────────────────────────────────────────────
+setupTabs('showTabs',   'show-panels');
+setupTabs('kwTabs',     'kw-panels');
+
+// ── Demo data (remove in production) ─────────────────────────────────────────
+state.shows.youtube    = ['breaking bad', 'house of dragon'];
+state.shows.reddit     = ['succession'];
+state.shows.twitter    = ['the bear', 'severance'];
+state.keywords.youtube = ['season finale', 'dies'];
+state.keywords.reddit  = ['spoiler', 'plot twist'];
+state.keywords.twitter = ['leaked'];
+renderAll();
+
+// In real extension: loadSettings();
+</script>
 </body>
 </html>
