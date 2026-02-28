@@ -1,96 +1,91 @@
 /**
- * content.js – SpoilerShield Content Script
+ * content/content.js – SpoilerShield v3 (Show-Aware Spoiler Detection)
  *
- * ARCHITECTURE OVERVIEW
- * ──────────────────────────────────────────────────────────────────────────
- * 1. getDomain()       – Detects which supported platform we're on.
- * 2. getContentRoot()  – Returns the platform-specific element to blur.
- * 3. scanForSpoilers() – Walks only visible content containers, looking for
- *                        keyword matches. Skips script/style/noscript tags.
- * 4. blurContent()     – Applies blur + overlay to the content root.
- * 5. setupObserver()   – Installs a MutationObserver that debounces scans
- *                        whenever new DOM nodes are added (infinite-scroll,
- *                        lazy-load, etc.).
+ * ── WHAT CHANGED FROM V2 ──────────────────────────────────────────────────
  *
- * DYNAMIC SITE HANDLING
- * ──────────────────────────────────────────────────────────────────────────
- * YouTube, Twitter/X, and Reddit are Single Page Applications (SPAs). They
- * mutate the DOM rather than navigating to new pages, so a one-time scan at
- * document_idle would miss dynamically loaded content.
+ * V2 had a generic Stage 1 that checked every post for words like "dies" or
+ * "ending" — but had no idea WHAT the user cared about. This caused false
+ * positives (blurring random posts about death or endings that had nothing
+ * to do with anything the user was watching).
  *
- * MutationObserver watches for childList changes on the content root (or
- * document.body as fallback). Every time new nodes land in the DOM:
- *   • We schedule a debounced scan (avoids firing on every single mutation).
- *   • The scan only reads text from the platform's known content containers.
- *   • Once a spoiler is found we disconnect the observer to stop all future
- *     scanning (no infinite loops, no wasted CPU).
+ * V3 replaces that with a show-aware two-stage pipeline:
  *
- * PERFORMANCE
- * ──────────────────────────────────────────────────────────────────────────
- * • Debounce (300 ms) collapses bursts of mutations into one scan.
- * • We target specific container selectors per platform, not document.body.
- * • innerText is avoided in favour of textContent (no layout reflow).
- * • SKIP_TAGS prevents reading script/style/noscript nodes.
- * • A `blurred` flag short-circuits everything once triggered.
+ *   Stage 1 – Show mention check (instant, zero cost)
+ *     Does this post mention ANY of the user's protected shows by name?
+ *     e.g. if the user added "Breaking Bad" — does this post say "breaking bad"?
+ *     If NO → skip entirely. If YES → move to Stage 2.
+ *
+ *   Stage 2 – Gemini spoiler confirmation (async, only for show-relevant posts)
+ *     "Does this text contain spoilers for [Show Name]?"
+ *     Gemini replies YES or NO.
+ *     If YES → blur the post and show "⚠ Spoiler Hidden – [Show Name]"
+ *
+ * This is much more accurate because:
+ *   • Only posts that actually MENTION the show reach Gemini
+ *   • Gemini gets the show name as context ("is this a spoiler for X?")
+ *   • The overlay tells the user WHICH show triggered the blur
+ *   • Far fewer false positives and far fewer API calls
+ *
+ * ── FULL PIPELINE ─────────────────────────────────────────────────────────
+ *
+ *   Post text extracted
+ *         │
+ *         ▼
+ *   Stage 1: Does text mention any protected show?
+ *         │
+ *         ├── NO  → skip (Gemini not called)
+ *         │
+ *         └── YES → which show matched?
+ *                         │
+ *                         ▼
+ *                   Stage 2: Ask Gemini
+ *                   "Does this spoil [Show Name]?"
+ *                         │
+ *                         ├── NO  → not a spoiler, do nothing
+ *                         │
+ *                         └── YES → blur post
+ *                                   show "⚠ Spoiler Hidden – [Show Name]"
+ *                                   "Do you want to see the spoiler? Click to reveal"
  */
 
 'use strict';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-/** Tags whose text we always skip – they contain code, not readable content */
+/** Tags whose text we never read — they hold code, not content */
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'HEAD', 'META', 'LINK']);
 
 /**
- * Per-platform content-container selectors.
- * We scan ONLY nodes that match these to avoid processing the whole document.
- *
- * YouTube  – ytd-rich-item-renderer, ytd-comment-renderer, ytd-video-primary-info-renderer
- * Twitter  – article elements inside main (each tweet card)
- * Reddit   – shreddit-post, .thing (old Reddit), .Post (new Reddit)
+ * Per-platform CSS selectors for individual post containers.
+ * Blur is applied at this element level — not the whole page.
  */
-const PLATFORM_SCAN_SELECTORS = {
+const PLATFORM_POST_SELECTORS = {
   youtube : 'ytd-rich-item-renderer, ytd-video-primary-info-renderer, ytd-comment-renderer, ytd-compact-video-renderer',
   twitter : 'article',
   x       : 'article',
   reddit  : 'shreddit-post, .thing, [data-testid="post-container"], .Post',
 };
 
-/**
- * Per-platform blur-target selectors.
- * We blur THIS element – the main content wrapper, NOT the whole <body>.
- * This ensures the browser chrome and extension popup are unaffected.
- */
-const PLATFORM_BLUR_SELECTORS = {
-  youtube : 'ytd-app, #contents',
-  twitter : 'main',
-  x       : 'main',
-  reddit  : 'shreddit-app, #SHORTCUT_FOCUSABLE_DIV, .ListingLayout-backgroundContainer, main',
-};
-
-const OVERLAY_ID      = 'spoilershield-overlay';
-const DEBOUNCE_DELAY  = 300; // ms – wait this long after last mutation before scanning
+const GEMINI_API_URL  = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=';
+const DEBOUNCE_DELAY  = 400; // ms
 
 // ── Module State ───────────────────────────────────────────────────────────
-let keywords    = [];   // lowercased keyword strings from storage
-let domain      = null; // one of: youtube | twitter | x | reddit | null
-let blurred     = false;
-let observer    = null;
-let debounceTimer = null;
+let domain          = null;
+let geminiApiKey    = '';
+let shieldEnabled   = true;
+let protectedShows  = [];   // string[] — lowercase show/movie names from storage
+let observer        = null;
+let debounceTimer   = null;
+
+/**
+ * seenPosts – WeakSet<Element>
+ * Tracks posts already processed so we never send the same post to Gemini twice.
+ * WeakSet entries are garbage-collected when the element is removed from DOM.
+ */
+const seenPosts = new WeakSet();
 
 // ── 1. Domain Detection ────────────────────────────────────────────────────
 
-/**
- * getDomain()
- * Examines window.location.hostname and maps it to a canonical platform key.
- * Returns null if the site isn't in our supported list.
- *
- * This is more reliable than checking manifest host_permissions because the
- * content script could theoretically be injected on subdomains we haven't
- * anticipated (e.g., music.youtube.com).
- *
- * @returns {string|null}
- */
 function getDomain() {
   const host = window.location.hostname.replace(/^www\./, '');
   if (host.includes('youtube.com'))  return 'youtube';
@@ -100,243 +95,397 @@ function getDomain() {
   return null;
 }
 
-// ── 2. Content Root ────────────────────────────────────────────────────────
-
-/**
- * getContentRoot()
- * Returns the DOM element we will blur for the current platform.
- * Tries each comma-separated selector in order and returns the first hit.
- * Falls back to document.body if nothing matches (shouldn't happen).
- *
- * @returns {Element}
- */
-function getContentRoot() {
-  const selectors = (PLATFORM_BLUR_SELECTORS[domain] || '').split(',').map(s => s.trim());
-  for (const sel of selectors) {
-    const el = document.querySelector(sel);
-    if (el) return el;
-  }
-  return document.body; // safe fallback
-}
-
-// ── 3. Spoiler Scan ────────────────────────────────────────────────────────
+// ── 2. Text Extraction ─────────────────────────────────────────────────────
 
 /**
  * extractText(node)
- * Recursively collects textContent from a node, skipping tag types in
- * SKIP_TAGS. Using textContent instead of innerText avoids forcing a layout
- * reflow (significant perf win on large DOM trees).
- *
- * @param {Node} node
- * @returns {string}
+ * Recursively collects text from a DOM subtree, skipping non-content tags.
+ * textContent is used instead of innerText to avoid layout reflow.
  */
 function extractText(node) {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+  if (node.nodeType === Node.TEXT_NODE)    return node.textContent;
   if (node.nodeType !== Node.ELEMENT_NODE) return '';
-  if (SKIP_TAGS.has(node.tagName)) return '';
-
+  if (SKIP_TAGS.has(node.tagName))         return '';
   let text = '';
-  for (const child of node.childNodes) {
-    text += extractText(child);
-  }
+  for (const child of node.childNodes) text += extractText(child);
   return text;
 }
 
+// ── 3. Stage 1 – Show Mention Check ───────────────────────────────────────
+
 /**
- * scanForSpoilers()
- * Queries only the platform-specific content containers, then extracts text
- * from each and checks for keyword matches.
+ * findMentionedShow(text)
  *
- * Returns true if a match is found, false otherwise.
- * Bails immediately on first match to minimise work.
+ * Checks whether the post text mentions any of the user's protected shows.
+ * Returns the FIRST matching show name, or null if none match.
  *
- * @returns {boolean}
+ * WHY THIS APPROACH:
+ * Simply checking if the show name appears as a substring is fast and works
+ * well for most cases. "breaking bad" will match "I watched breaking bad last
+ * night", "breaking bad season 5", "BreakingBad" won't match (intentional —
+ * hashtags without spaces are usually UI noise, not post content).
+ *
+ * We also check for common abbreviations the user might not have added:
+ * if they added "game of thrones" we also check "got" as a bonus.
+ * For now we keep this simple — just substring match on the full name.
+ *
+ * @param   {string}      text – lowercased post text
+ * @returns {string|null}      – matched show name or null
  */
-function scanForSpoilers() {
-  if (blurred || !keywords.length) return false;
-
-  const sel = PLATFORM_SCAN_SELECTORS[domain];
-  if (!sel) return false;
-
-  // querySelectorAll is lazy (NodeList) – we iterate and bail early
-  const containers = document.querySelectorAll(sel);
-
-  for (const container of containers) {
-    const text = extractText(container).toLowerCase();
-    for (const kw of keywords) {
-      if (text.includes(kw)) {
-        console.info(`[SpoilerShield] Keyword matched: "${kw}"`);
-        return true;
-      }
+function findMentionedShow(text) {
+  for (const show of protectedShows) {
+    if (text.includes(show)) {
+      return show; // return the first match
     }
   }
-
-  return false;
+  return null;
 }
 
-// ── 4. Blur & Overlay ──────────────────────────────────────────────────────
+// ── 4. Stage 2 – Gemini Spoiler Check ─────────────────────────────────────
 
 /**
- * blurContent()
- * Applies CSS blur to the platform content root and inserts the overlay.
- * Also disables scrolling and pointer events on the page body.
+ * askGemini(text, showName)
  *
- * The overlay is a single fixed <div> appended to document.body so it sits
- * above everything including the blurred content root.
+ * Sends the post text to Gemini 1.5 Flash with a show-specific prompt.
  *
- * Clicking the overlay removes all effects (restoreContent).
+ * PROMPT DESIGN:
+ * Including the show name is critical. It tells Gemini exactly what to look
+ * for. Without it, Gemini would have to guess whether "he dies at the end"
+ * is a spoiler for anything. With it, Gemini knows the context and can make
+ * a much better YES/NO decision.
+ *
+ * @param   {string}           text     – post text (will be truncated to 1500 chars)
+ * @param   {string}           showName – the show that was mentioned
+ * @returns {Promise<boolean>}          – true if Gemini confirms it's a spoiler
  */
-function blurContent() {
-  if (blurred) return; // prevent duplicate application
-  blurred = true;
-
-  // Stop observer – no more scanning needed
-  if (observer) {
-    observer.disconnect();
-    observer = null;
+async function askGemini(text, showName) {
+  if (!geminiApiKey) {
+    console.warn('[SpoilerShield] No API key set — skipping Gemini check.');
+    return false;
   }
 
-  const root = getContentRoot();
+  const trimmed = text.trim().slice(0, 1500);
 
-  // Blur + pointer-events:none on the content area
-  root.style.cssText += ';filter:blur(18px);pointer-events:none;user-select:none;transition:filter 0.3s ease;';
+  // Show-specific prompt — Gemini now knows exactly what we're protecting
+  const prompt = `You are a spoiler detection assistant for a browser extension.
 
-  // Prevent body scroll while blurred
-  document.body.style.overflow = 'hidden';
+The user has NOT yet watched "${showName}" and wants to avoid spoilers.
 
-  // ── Build Overlay ──────────────────────────────────────────────────────
-  if (document.getElementById(OVERLAY_ID)) return; // guard: no duplicates
+Analyze the following text and decide: does it reveal spoilers about "${showName}"?
 
+A spoiler includes: character deaths, plot twists, season or series endings,
+villain reveals, relationship outcomes, or any major story event.
+
+Reply with ONE word only:
+- YES if the text contains spoilers about "${showName}"
+- NO if it does not
+
+Do not explain. Do not add punctuation. One word only.
+
+Text:
+${trimmed}`;
+
+  console.log(`[SpoilerShield] Asking Gemini about "${showName}"…`);
+
+  try {
+    const response = await fetch(`${GEMINI_API_URL}${geminiApiKey}`, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`[SpoilerShield] Gemini error ${response.status}:`, err);
+      return false;
+    }
+
+    const data     = await response.json();
+    const reply    = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const cleaned  = reply.trim().toUpperCase();
+
+    console.log(`[SpoilerShield] Gemini reply for "${showName}": ${cleaned}`);
+    return cleaned.startsWith('YES');
+
+  } catch (err) {
+    console.error('[SpoilerShield] Gemini fetch failed:', err);
+    return false;
+  }
+}
+
+// ── 5. Per-Post Blur with Show Name ───────────────────────────────────────
+
+/**
+ * blurPost(postEl, showName)
+ *
+ * Blurs a single post container and adds a click-to-reveal overlay.
+ * The overlay shows WHICH show triggered the blur and asks the user
+ * if they want to see it — much clearer than a generic "spoiler hidden".
+ *
+ * Clicking "Yes, show it" reveals the post immediately.
+ * The post stays revealed for the rest of the session.
+ *
+ * @param {Element} postEl   – the post DOM element to blur
+ * @param {string}  showName – the show name that triggered this blur
+ */
+function blurPost(postEl, showName) {
+  if (postEl.dataset.ssBlurred === 'true') return; // already blurred
+  postEl.dataset.ssBlurred = 'true';
+
+  // Ensure overlay is positioned relative to this post container
+  if (!postEl.style.position || postEl.style.position === 'static') {
+    postEl.style.position = 'relative';
+  }
+
+  // Apply blur to the post content itself
+  postEl.style.filter     = 'blur(10px)';
+  postEl.style.userSelect = 'none';
+  postEl.style.transition = 'filter 0.35s ease';
+
+  // Capitalise show name nicely for display (e.g. "breaking bad" → "Breaking Bad")
+  const displayName = showName
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+  // Build overlay — sits inside the post at position:absolute
   const overlay = document.createElement('div');
-  overlay.id = OVERLAY_ID;
+  overlay.className = 'ss-post-overlay';
   overlay.setAttribute('role', 'alertdialog');
-  overlay.setAttribute('aria-label', 'Spoiler detected. Click to reveal.');
+  overlay.setAttribute('aria-label', `Spoiler for ${displayName}. Click to reveal.`);
 
-  // Overlay styles are set inline for portability (style.css covers the class)
   overlay.innerHTML = `
-    <div class="ss-overlay-inner">
-      <div class="ss-icon">🛡</div>
-      <h2 class="ss-title">⚠ Spoiler Detected</h2>
-      <p class="ss-sub">Click anywhere to reveal</p>
+    <div class="ss-post-overlay-inner">
+      <span class="ss-post-icon">🛡</span>
+      <span class="ss-post-show-name">${escapeHtml(displayName)}</span>
+      <span class="ss-post-title">⚠ Spoiler Hidden</span>
+      <span class="ss-post-question">Do you want to see this spoiler?</span>
+      <button class="ss-reveal-btn" id="ss-reveal-${Date.now()}">
+        Yes, show it
+      </button>
     </div>
   `;
 
-  document.body.appendChild(overlay);
+  // The reveal button unblurs just this post
+  const revealBtn = overlay.querySelector('.ss-reveal-btn');
+  revealBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // prevent any parent click handlers firing
+    revealPost(postEl, overlay);
+  }, { once: true });
 
-  // Single click on overlay restores everything
-  overlay.addEventListener('click', restoreContent, { once: true });
+  postEl.appendChild(overlay);
+  console.log(`[SpoilerShield] Blurred post for show: "${displayName}"`);
 }
 
 /**
- * restoreContent()
- * Removes blur, re-enables interaction, and removes the overlay.
- * Called when the user clicks the overlay.
+ * revealPost(postEl, overlay)
+ * Removes the blur and overlay from a single post when the user clicks reveal.
+ *
+ * @param {Element} postEl
+ * @param {Element} overlay
  */
-function restoreContent() {
-  blurred = false; // allow future scans if user navigates (SPA)
-
-  const root = getContentRoot();
-  root.style.filter         = '';
-  root.style.pointerEvents  = '';
-  root.style.userSelect     = '';
-
-  document.body.style.overflow = '';
-
-  const overlay = document.getElementById(OVERLAY_ID);
-  if (overlay) overlay.remove();
-
-  // Re-attach observer so navigation to new content is still monitored
-  setupObserver();
+function revealPost(postEl, overlay) {
+  postEl.style.filter      = '';
+  postEl.style.userSelect  = '';
+  postEl.dataset.ssBlurred = 'false';
+  overlay.remove();
+  console.log('[SpoilerShield] Post revealed by user.');
 }
 
-// ── 5. MutationObserver Setup ──────────────────────────────────────────────
+/** escapeHtml — prevent XSS when injecting show names into innerHTML */
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+// ── 6. Process a Single Post ───────────────────────────────────────────────
+
+/**
+ * processPost(postEl)
+ *
+ * Full detection pipeline for one post element:
+ *   1. Skip if already seen (WeakSet deduplication — no duplicate API calls)
+ *   2. Extract text from the post
+ *   3. Stage 1: Does the post mention any protected show? → if NO, skip
+ *   4. Stage 2: Ask Gemini "is this a spoiler for [show]?" → if NO, skip
+ *   5. Blur the post with show name in the overlay
+ *
+ * @param {Element} postEl
+ */
+async function processPost(postEl) {
+  // ── Deduplication ─────────────────────────────────────────────────────
+  if (seenPosts.has(postEl)) return;
+  seenPosts.add(postEl); // mark before any async work to block concurrent calls
+
+  const rawText = extractText(postEl).trim();
+  if (!rawText) return; // empty / image-only post
+
+  const text = rawText.toLowerCase();
+
+  // ── Stage 1: Show mention check ───────────────────────────────────────
+  const matchedShow = findMentionedShow(text);
+
+  if (!matchedShow) {
+    // Post doesn't mention any protected show — ignore completely
+    return;
+  }
+
+  console.log(`[SpoilerShield] Post mentions "${matchedShow}" — checking with Gemini…`);
+
+  // ── Stage 2: Gemini confirmation ──────────────────────────────────────
+  const isSpoiler = await askGemini(rawText, matchedShow);
+
+  if (isSpoiler) {
+    blurPost(postEl, matchedShow);
+  } else {
+    console.log(`[SpoilerShield] Gemini: not a spoiler for "${matchedShow}".`);
+  }
+}
+
+// ── 7. Scan All Posts ──────────────────────────────────────────────────────
+
+/**
+ * scanAllPosts()
+ * Finds all post containers for the current platform and runs processPost()
+ * on each. Already-seen posts skip instantly via WeakSet.
+ * Exits early if shield is off, no API key, or no protected shows.
+ */
+function scanAllPosts() {
+  // Early exits — nothing to do in these states
+  if (!shieldEnabled)          return;
+  if (!geminiApiKey)           return;
+  if (!protectedShows.length)  {
+    console.log('[SpoilerShield] No protected shows — add a show in the popup.');
+    return;
+  }
+
+  const sel = PLATFORM_POST_SELECTORS[domain];
+  if (!sel) return;
+
+  const posts = document.querySelectorAll(sel);
+  console.log(`[SpoilerShield] Scanning ${posts.length} post(s) for: ${protectedShows.join(', ')}`);
+
+  // Fire-and-forget — we don't block the scan loop on Gemini responses
+  posts.forEach(post => processPost(post));
+}
+
+// ── 8. MutationObserver ────────────────────────────────────────────────────
 
 /**
  * setupObserver()
- * Installs a MutationObserver on the content root (or body as fallback).
- *
- * HOW MutationObserver WORKS:
- * ──────────────────────────────────────────────────────────────────────────
- * MutationObserver is a native browser API that fires a callback whenever
- * the DOM changes. We pass { childList: true, subtree: true } which means:
- *   • childList  – notify when child nodes are added or removed
- *   • subtree    – watch all descendants, not just direct children
- *
- * Each callback receives an array of MutationRecord objects. We don't need
- * to inspect these records because we re-scan the full container set anyway.
- *
- * DEBOUNCE:
- * SPAs like YouTube can fire dozens of mutations per second when content
- * loads. Without debouncing we'd run scanForSpoilers() excessively.
- * Instead, each mutation callback resets a 300 ms timer. The scan only
- * runs after 300 ms of DOM silence – collapsing burst mutations into one scan.
- *
- * INFINITE LOOP PREVENTION:
- * The observer watches the content root for new nodes.
- * blurContent() itself only touches CSS properties (style), not childList,
- * so it does NOT trigger the observer. The blurred flag further ensures we
- * do nothing if triggered again before disconnect.
+ * Watches document.body for new DOM nodes (infinite scroll / lazy load).
+ * Debounced at 400 ms to collapse rapid mutation bursts into one scan.
  */
 function setupObserver() {
-  if (observer) return; // already running
+  if (observer) { observer.disconnect(); observer = null; }
 
-  // Prefer the platform root element; fallback to body
-  const target = getContentRoot() || document.body;
-
-  observer = new MutationObserver((_mutations) => {
-    // Debounce: cancel any pending scan and restart the timer
+  observer = new MutationObserver(() => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      if (scanForSpoilers()) {
-        blurContent();
-      }
-    }, DEBOUNCE_DELAY);
+    debounceTimer = setTimeout(scanAllPosts, DEBOUNCE_DELAY);
   });
 
-  observer.observe(target, { childList: true, subtree: true });
-  console.info('[SpoilerShield] Observer active on', target.tagName || 'BODY');
+  observer.observe(document.body, { childList: true, subtree: true });
+  console.log('[SpoilerShield] MutationObserver active.');
 }
 
-// ── Initialisation ─────────────────────────────────────────────────────────
+// ── 9. SPA Navigation ──────────────────────────────────────────────────────
+
+/**
+ * handleNavigation()
+ * YouTube, Twitter, Reddit are SPAs — page changes don't reload the script.
+ * We intercept pushState + popstate to re-scan after each navigation.
+ * 800 ms delay lets the SPA render its new content before we scan.
+ */
+function handleNavigation() {
+  console.log('[SpoilerShield] SPA navigation detected — re-scanning…');
+  clearTimeout(debounceTimer);
+  setTimeout(scanAllPosts, 800);
+}
+
+// ── 10. Storage Change Listener ────────────────────────────────────────────
+
+/**
+ * Reacts to popup changes in real time — no page reload needed.
+ * Handles: enabled toggle, API key update, show list update.
+ */
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
+
+  if (changes.enabled !== undefined) {
+    shieldEnabled = changes.enabled.newValue;
+    console.log(`[SpoilerShield] Shield ${shieldEnabled ? 'enabled' : 'disabled'}.`);
+    if (shieldEnabled) scanAllPosts();
+  }
+
+  if (changes.geminiApiKey !== undefined) {
+    geminiApiKey = changes.geminiApiKey.newValue || '';
+    console.log('[SpoilerShield] API key updated.');
+    if (geminiApiKey && shieldEnabled) scanAllPosts();
+  }
+
+  // ── New in v3: react when the user adds or removes a show ──────────────
+  if (changes.protectedShows !== undefined) {
+    protectedShows = (changes.protectedShows.newValue || []).map(s => s.toLowerCase().trim());
+    console.log('[SpoilerShield] Protected shows updated:', protectedShows);
+
+    // Immediately scan with the updated show list
+    if (shieldEnabled && geminiApiKey) scanAllPosts();
+  }
+});
+
+// ── 11. Initialisation ─────────────────────────────────────────────────────
 
 /**
  * init()
- * Entry point. Reads settings from chrome.storage, validates the platform,
- * does an immediate scan, then sets up the MutationObserver for future changes.
+ * Entry point. Loads all settings, then starts scanning and observing.
  */
 async function init() {
   try {
     domain = getDomain();
-    if (!domain) return; // unsupported site – exit silently
+    if (!domain) return; // unsupported site — exit silently
 
-    const data = await chrome.storage.sync.get({ keywords: [], enabled: true });
+    const data = await chrome.storage.sync.get({
+      enabled        : true,
+      geminiApiKey   : '',
+      protectedShows : [],
+    });
 
-    if (!data.enabled) {
-      console.info('[SpoilerShield] Shield is disabled by user.');
+    shieldEnabled  = data.enabled;
+    geminiApiKey   = data.geminiApiKey;
+    protectedShows = (data.protectedShows || []).map(s => s.toLowerCase().trim());
+
+    console.log(
+      `[SpoilerShield] v3 active on "${domain}" | ` +
+      `enabled=${shieldEnabled} | ` +
+      `shows=[${protectedShows.join(', ')}] | ` +
+      `hasKey=${!!geminiApiKey}`
+    );
+
+    if (!shieldEnabled) {
+      console.log('[SpoilerShield] Shield disabled — exiting.');
       return;
     }
 
-    keywords = data.keywords.map(k => k.toLowerCase().trim()).filter(Boolean);
-
-    if (!keywords.length) {
-      console.info('[SpoilerShield] No keywords configured.');
+    if (!geminiApiKey) {
+      console.warn('[SpoilerShield] No API key — open the popup to add one.');
       return;
     }
 
-    console.info(`[SpoilerShield] Active on "${domain}" with ${keywords.length} keyword(s).`);
-
-    // Immediate scan – catches content already in DOM at load time
-    if (scanForSpoilers()) {
-      blurContent();
-      return; // observer not needed if already blurred
+    if (!protectedShows.length) {
+      console.warn('[SpoilerShield] No shows added — open the popup to add a show.');
+      // Still set up the observer so we react the moment a show is added
     }
 
-    // Watch for dynamically loaded content (infinite scroll, SPA navigation)
+    // Scan content already in the DOM
+    scanAllPosts();
+
+    // Watch for dynamically loaded content
     setupObserver();
 
-    // Re-run when user navigates within the SPA (pushState / replaceState)
-    // YouTube and Twitter don't fire 'load' on SPA transitions, so we hook
-    // into the History API by intercepting pushState.
+    // Hook SPA navigation
     const originalPushState = history.pushState.bind(history);
     history.pushState = function (...args) {
       originalPushState(...args);
@@ -348,67 +497,6 @@ async function init() {
     console.error('[SpoilerShield] init error:', err);
   }
 }
-
-/**
- * handleNavigation()
- * Called when the SPA navigates to a new "page" (URL change without reload).
- * Resets state and starts fresh scanning on the new content.
- *
- * We wait 800 ms to give the SPA time to render its new content before scanning.
- */
-function handleNavigation() {
-  // Disconnect any existing observer
-  if (observer) { observer.disconnect(); observer = null; }
-  clearTimeout(debounceTimer);
-
-  // If currently blurred, clean up UI first
-  if (blurred) {
-    restoreContent();
-    return; // restoreContent re-attaches observer
-  }
-
-  // Small delay – SPA frameworks need a tick to render new route content
-  setTimeout(() => {
-    if (!blurred) {
-      if (scanForSpoilers()) {
-        blurContent();
-      } else {
-        setupObserver();
-      }
-    }
-  }, 800);
-}
-
-// ── Storage Change Listener ────────────────────────────────────────────────
-
-/**
- * Listen for changes made in the popup (e.g. new keywords added while
- * the user is browsing). We reload keywords and re-scan immediately.
- */
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'sync') return;
-
-  if (changes.enabled) {
-    const nowEnabled = changes.enabled.newValue;
-    if (!nowEnabled && observer) {
-      observer.disconnect();
-      observer = null;
-      console.info('[SpoilerShield] Disabled via popup.');
-    }
-    if (nowEnabled && !observer && !blurred) {
-      setupObserver();
-    }
-  }
-
-  if (changes.keywords) {
-    keywords = (changes.keywords.newValue || []).map(k => k.toLowerCase().trim()).filter(Boolean);
-    console.info('[SpoilerShield] Keywords updated:', keywords);
-    // Re-scan with updated keywords
-    if (!blurred && scanForSpoilers()) {
-      blurContent();
-    }
-  }
-});
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 init();

@@ -1,122 +1,182 @@
 /**
- * style.css – SpoilerShield Content Styles
+ * style/style.css – SpoilerShield v3
  *
- * These styles are injected into every supported page by the content script.
- * They handle:
- *  1. The fullscreen spoiler overlay (#spoilershield-overlay)
- *  2. The inner card (.ss-overlay-inner)
- *
- * Blur is applied inline via JavaScript so it can be easily toggled.
- * The overlay uses position:fixed so it covers the viewport regardless of
- * scroll position, without touching the browser chrome.
+ * CHANGES FROM V2:
+ *   • .ss-post-overlay-inner now has more vertical space for the new elements
+ *   • Added .ss-post-show-name  — purple pill showing WHICH show was matched
+ *   • Added .ss-post-question   — "Do you want to see this spoiler?"
+ *   • Added .ss-reveal-btn      — the clickable "Yes, show it" button
+ *   • All existing animation and layout styles are preserved
  */
 
-/* ── Overlay Container ────────────────────────────────────────────────────── */
-#spoilershield-overlay {
-  /* Fixed covers the full viewport; z-index 2147483647 is the max value,
-     ensuring it sits above all page content but NOT the browser toolbar */
-  position: fixed;
-  inset: 0;                         /* shorthand for top/right/bottom/left: 0 */
-  z-index: 2147483647;
+/* ── Post Overlay Container ───────────────────────────────────────────────── */
 
-  /* Semi-transparent dark backdrop with a subtle blur */
-  background: rgba(5, 5, 8, 0.88);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+/*
+ * Position:absolute so it fills exactly the blurred post card.
+ * The parent post gets position:relative set by JS before this is appended.
+ */
+.ss-post-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
 
-  /* Flex-centre the inner card */
   display: flex;
   align-items: center;
   justify-content: center;
 
-  cursor: pointer;
+  background: rgba(5, 5, 8, 0.82);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 
-  /* Fade in */
-  animation: ss-fadeIn 0.35s ease both;
+  border-radius: inherit;
+  animation: ss-post-fade-in 0.3s ease both;
+
+  /* Don't set cursor:pointer here — the button inside handles the click */
 }
 
-@keyframes ss-fadeIn {
+@keyframes ss-post-fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
 
 /* ── Inner Card ───────────────────────────────────────────────────────────── */
-.ss-overlay-inner {
+
+.ss-post-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none; /* card itself is not clickable — only the button is */
+
   background: linear-gradient(145deg, #18181c 0%, #111114 100%);
-  border: 1px solid rgba(255, 75, 75, 0.35);
-  border-radius: 18px;
-  padding: 44px 52px;
-  text-align: center;
-  pointer-events: none; /* clicks pass through to parent overlay handler */
+  border: 1px solid rgba(124, 106, 247, 0.4); /* purple border for v3 */
+  border-radius: 14px;
+  padding: 20px 28px 18px;
+  min-width: 220px;
+  max-width: 320px;
 
   box-shadow:
     0 0 0 1px rgba(255,255,255,0.04) inset,
-    0 30px 80px rgba(0,0,0,0.7),
-    0 0 60px rgba(255,75,75,0.12);
+    0 16px 48px rgba(0,0,0,0.65),
+    0 0 36px rgba(124,106,247,0.12);
 
-  animation: ss-slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: ss-card-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.05s;
 
-  /* Prevent text selection on the card */
   user-select: none;
   -webkit-user-select: none;
 }
 
-@keyframes ss-slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(24px) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+@keyframes ss-card-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 
 /* ── Shield Icon ──────────────────────────────────────────────────────────── */
-.ss-icon {
-  font-size: 48px;
-  line-height: 1;
-  margin-bottom: 20px;
-  display: block;
 
-  /* Subtle pulse glow */
+.ss-post-icon {
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(124, 106, 247, 0.6));
   animation: ss-pulse 2.4s ease-in-out infinite;
-  filter: drop-shadow(0 0 18px rgba(255, 75, 75, 0.5));
 }
 
 @keyframes ss-pulse {
-  0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 18px rgba(255,75,75,0.4)); }
-  50%       { transform: scale(1.08); filter: drop-shadow(0 0 28px rgba(255,75,75,0.7)); }
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(124,106,247,0.4)); }
+  50%       { filter: drop-shadow(0 0 22px rgba(124,106,247,0.85)); }
 }
 
-/* ── Title ────────────────────────────────────────────────────────────────── */
-.ss-title {
+/* ── Show Name Pill ───────────────────────────────────────────────────────── */
+
+/*
+ * Displays WHICH show triggered the blur.
+ * e.g. "Breaking Bad"
+ * Purple pill — matches the show tag colour in the popup.
+ */
+.ss-post-show-name {
+  display: inline-block;
+  background: rgba(124, 106, 247, 0.15);
+  border: 1px solid rgba(124, 106, 247, 0.4);
+  border-radius: 20px;
+  padding: 3px 12px;
   font-family: 'Courier New', Courier, monospace;
-  font-size: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #a99ff5;
+  text-transform: uppercase;
+}
+
+/* ── Spoiler Title ────────────────────────────────────────────────────────── */
+
+.ss-post-title {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: #f0f0f5;
-  margin: 0 0 10px;
   text-transform: uppercase;
+  margin-top: 2px;
 }
 
-/* ── Subtitle ─────────────────────────────────────────────────────────────── */
-.ss-sub {
+/* ── Question Text ────────────────────────────────────────────────────────── */
+
+/*
+ * "Do you want to see this spoiler?"
+ * Softer, smaller text sitting between the title and the button.
+ */
+.ss-post-question {
   font-family: 'Courier New', Courier, monospace;
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  color: rgba(255, 75, 75, 0.85);
-  margin: 0;
-  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: #6c6c7e;
+  text-align: center;
 }
 
-/* ── Hover Hint ───────────────────────────────────────────────────────────── */
-#spoilershield-overlay:hover .ss-overlay-inner {
-  border-color: rgba(255, 75, 75, 0.65);
+/* ── Reveal Button ────────────────────────────────────────────────────────── */
+
+/*
+ * "Yes, show it" — the primary action.
+ * pointer-events:auto re-enables clicks on just this element even though
+ * .ss-post-overlay-inner has pointer-events:none.
+ */
+.ss-reveal-btn {
+  pointer-events: auto; /* override parent none */
+  cursor: pointer;
+
+  background: rgba(124, 106, 247, 0.18);
+  border: 1px solid rgba(124, 106, 247, 0.5);
+  border-radius: 8px;
+  padding: 7px 20px;
+  margin-top: 4px;
+
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #a99ff5;
+
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+}
+
+.ss-reveal-btn:hover {
+  background: rgba(124, 106, 247, 0.32);
+  border-color: rgba(124, 106, 247, 0.8);
+  color: #fff;
+}
+
+.ss-reveal-btn:active {
+  transform: scale(0.96);
+}
+
+/* ── Card hover — highlight border slightly ───────────────────────────────── */
+
+.ss-post-overlay:hover .ss-post-overlay-inner {
+  border-color: rgba(124, 106, 247, 0.65);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.06) inset,
-    0 30px 80px rgba(0,0,0,0.7),
-    0 0 80px rgba(255,75,75,0.22);
+    0 0 0 1px rgba(255,255,255,0.05) inset,
+    0 16px 48px rgba(0,0,0,0.65),
+    0 0 50px rgba(124,106,247,0.2);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
