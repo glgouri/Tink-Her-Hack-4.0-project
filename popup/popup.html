@@ -5,34 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SpoilerShield</title>
   <style>
-    /* ── Reset & Base ─────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d0d0f;
-      --surface:   #16161a;
-      --border:    #2a2a30;
-      --accent:    #ff4b4b;
-      --accent-lo: rgba(255,75,75,0.12);
-      --text:      #e8e8ee;
-      --muted:     #6c6c7e;
-      --success:   #3ecf8e;
-      --radius:    10px;
-      --font:      'Courier New', monospace;
+      --bg:          #0d0d0f;
+      --surface:     #16161a;
+      --border:      #2a2a30;
+      --accent:      #ff4b4b;
+      --accent-lo:   rgba(255,75,75,0.12);
+      --show-color:  #7c6af7;           /* purple — distinct from keyword red */
+      --show-lo:     rgba(124,106,247,0.13);
+      --text:        #e8e8ee;
+      --muted:       #6c6c7e;
+      --success:     #3ecf8e;
+      --warning:     #f59e0b;
+      --radius:      10px;
+      --font:        'Courier New', monospace;
     }
 
     body {
-      width: 320px;
-      min-height: 400px;
+      width: 330px;
       background: var(--bg);
       color: var(--text);
       font-family: var(--font);
       display: flex;
       flex-direction: column;
-      gap: 0;
     }
 
-    /* ── Header ───────────────────────────────────────────────────── */
+    /* ── Header ─────────────────────────────────────────────────── */
     .header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -41,94 +41,65 @@
       align-items: center;
       gap: 10px;
     }
-
     .shield-icon {
       width: 32px; height: 32px;
       background: var(--accent);
       border-radius: 8px;
       display: grid; place-items: center;
-      font-size: 16px;
-      flex-shrink: 0;
+      font-size: 16px; flex-shrink: 0;
       box-shadow: 0 0 18px rgba(255,75,75,0.4);
     }
-
     .header-text h1 {
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text);
+      font-size: 14px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
     }
+    .header-text p { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
 
-    .header-text p {
-      font-size: 10px;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-    }
-
-    /* ── Toggle Row ───────────────────────────────────────────────── */
+    /* ── Toggle Row ─────────────────────────────────────────────── */
     .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 14px 18px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
     }
-
-    .toggle-label {
-      font-size: 11px;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      text-transform: uppercase;
-    }
-
-    .toggle {
-      position: relative; width: 40px; height: 22px;
-    }
+    .toggle-label { font-size: 11px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+    .toggle { position: relative; width: 40px; height: 22px; }
     .toggle input { opacity: 0; width: 0; height: 0; }
     .slider {
       position: absolute; inset: 0;
-      background: var(--border);
-      border-radius: 22px;
-      cursor: pointer;
-      transition: background 0.25s;
+      background: var(--border); border-radius: 22px;
+      cursor: pointer; transition: background 0.25s;
     }
     .slider::before {
-      content: '';
-      position: absolute;
-      width: 16px; height: 16px;
-      left: 3px; top: 3px;
-      background: #fff;
-      border-radius: 50%;
-      transition: transform 0.25s;
+      content: ''; position: absolute;
+      width: 16px; height: 16px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: transform 0.25s;
     }
     .toggle input:checked + .slider { background: var(--accent); }
     .toggle input:checked + .slider::before { transform: translateX(18px); }
 
-    /* ── Keywords Section ─────────────────────────────────────────── */
+    /* ── Sections ───────────────────────────────────────────────── */
     .section {
-      padding: 16px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      flex: 1;
+      padding: 14px 18px;
+      display: flex; flex-direction: column; gap: 10px;
+      border-bottom: 1px solid var(--border);
     }
-
     .section-label {
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      text-transform: uppercase;
+      font-size: 10px; letter-spacing: 0.1em;
+      color: var(--muted); text-transform: uppercase;
     }
+    /* Purple accent for the shows section label */
+    .section-label.shows { color: var(--show-color); }
 
-    .input-row {
-      display: flex;
-      gap: 8px;
-    }
+    /* ── API Key Row ─────────────────────────────────────────────── */
+    .api-key-row { display: flex; gap: 6px; align-items: center; }
+    .api-key-hint { font-size: 10px; color: var(--muted); letter-spacing: 0.03em; }
+    .api-key-hint a { color: var(--warning); text-decoration: none; }
 
-    input[type="text"] {
-      flex: 1;
+    /* ── Inputs ─────────────────────────────────────────────────── */
+    input[type="text"],
+    input[type="password"] {
+      flex: 1; min-width: 0;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -139,52 +110,72 @@
       outline: none;
       transition: border-color 0.2s;
     }
+    input[type="text"]:focus,
+    input[type="password"]:focus { border-color: var(--accent); }
+    /* Purple focus ring for the show input */
+    input.show-input:focus { border-color: var(--show-color); }
+    input::placeholder { color: var(--muted); }
 
-    input[type="text"]:focus { border-color: var(--accent); }
-    input[type="text"]::placeholder { color: var(--muted); }
-
+    /* ── Buttons ─────────────────────────────────────────────────── */
     button {
-      background: var(--accent);
-      border: none;
-      border-radius: var(--radius);
-      color: #fff;
-      font-family: var(--font);
-      font-size: 18px;
+      background: var(--accent); border: none;
+      border-radius: var(--radius); color: #fff;
+      font-family: var(--font); font-size: 18px;
       width: 36px; height: 36px;
-      cursor: pointer;
-      display: grid; place-items: center;
+      cursor: pointer; display: grid; place-items: center; flex-shrink: 0;
       transition: opacity 0.2s, transform 0.1s;
-      flex-shrink: 0;
     }
     button:hover { opacity: 0.85; }
     button:active { transform: scale(0.95); }
 
-    /* ── Keyword Tags ─────────────────────────────────────────────── */
-    .tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      min-height: 60px;
-      max-height: 160px;
-      overflow-y: auto;
-      padding: 4px 0;
+    .btn-icon {
+      background: var(--surface); border: 1px solid var(--border);
+      font-size: 14px; width: 32px; height: 32px; color: var(--muted);
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--text); }
+
+    .btn-text {
+      width: auto; padding: 0 14px;
+      font-size: 11px; letter-spacing: 0.05em; height: 36px;
     }
 
+    /* Purple add button for shows */
+    .btn-show {
+      background: var(--show-color);
+      font-size: 18px;
+    }
+    .btn-show:hover { opacity: 0.85; }
+
+    /* ── Input Rows ─────────────────────────────────────────────── */
+    .input-row { display: flex; gap: 8px; }
+
+    /* ── Tag Lists ──────────────────────────────────────────────── */
+    .tags {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      min-height: 44px; max-height: 120px;
+      overflow-y: auto; padding: 2px 0;
+    }
     .tags::-webkit-scrollbar { width: 4px; }
     .tags::-webkit-scrollbar-track { background: transparent; }
     .tags::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+    /* Red keyword tags */
     .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+      display: inline-flex; align-items: center; gap: 6px;
       background: var(--accent-lo);
       border: 1px solid rgba(255,75,75,0.3);
-      border-radius: 6px;
-      padding: 4px 10px;
+      border-radius: 6px; padding: 4px 10px;
       font-size: 11px;
-      color: var(--text);
-      letter-spacing: 0.03em;
+      animation: tagIn 0.2s ease;
+    }
+
+    /* Purple show tags */
+    .show-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--show-lo);
+      border: 1px solid rgba(124,106,247,0.35);
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 11px;
       animation: tagIn 0.2s ease;
     }
 
@@ -193,42 +184,47 @@
       to   { opacity: 1; transform: scale(1); }
     }
 
-    .tag-del {
-      background: none;
-      border: none;
-      color: var(--accent);
-      font-size: 14px;
-      cursor: pointer;
-      width: auto; height: auto;
-      padding: 0;
-      line-height: 1;
-      opacity: 0.7;
+    .tag-del, .show-del {
+      background: none; border: none;
+      font-size: 14px; cursor: pointer;
+      width: auto; height: auto; padding: 0; line-height: 1; opacity: 0.7;
     }
-    .tag-del:hover { opacity: 1; }
+    .tag-del  { color: var(--accent); }
+    .show-del { color: var(--show-color); }
+    .tag-del:hover, .show-del:hover { opacity: 1; }
 
     .empty-state {
-      font-size: 11px;
-      color: var(--muted);
-      text-align: center;
-      padding: 16px 0;
-      letter-spacing: 0.03em;
+      font-size: 11px; color: var(--muted);
+      text-align: center; padding: 10px 0; letter-spacing: 0.03em;
     }
 
-    /* ── Status Bar ───────────────────────────────────────────────── */
+    /* ── Show count badge ───────────────────────────────────────── */
+    .show-count {
+      display: inline-block;
+      background: var(--show-lo);
+      border: 1px solid rgba(124,106,247,0.3);
+      border-radius: 20px;
+      padding: 1px 8px;
+      font-size: 9px;
+      color: var(--show-color);
+      letter-spacing: 0.05em;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* ── Status Bar ─────────────────────────────────────────────── */
     .status {
       padding: 10px 18px;
-      border-top: 1px solid var(--border);
-      font-size: 10px;
-      letter-spacing: 0.05em;
-      color: var(--muted);
-      text-align: center;
+      font-size: 10px; letter-spacing: 0.05em;
+      color: var(--muted); text-align: center;
     }
-
     .status.saved { color: var(--success); }
+    .status.error { color: var(--accent); }
   </style>
 </head>
 <body>
 
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
   <div class="header">
     <div class="shield-icon">🛡</div>
     <div class="header-text">
@@ -237,6 +233,7 @@
     </div>
   </div>
 
+  <!-- ── Shield Toggle ───────────────────────────────────────────────── -->
   <div class="toggle-row">
     <span class="toggle-label">Shield Active</span>
     <label class="toggle">
@@ -245,16 +242,62 @@
     </label>
   </div>
 
+  <!-- ── Gemini API Key ───────────────────────────────────────────────── -->
   <div class="section">
-    <span class="section-label">Spoiler Keywords</span>
+    <span class="section-label">Gemini API Key</span>
+    <div class="api-key-row">
+      <input type="password" id="apiKeyInput" placeholder="AIza…" autocomplete="off" spellcheck="false" />
+      <button class="btn-icon" id="toggleApiVis" title="Show / hide key">👁</button>
+      <button class="btn-text" id="saveApiKeyBtn" title="Save API key">Save</button>
+    </div>
+    <p class="api-key-hint">
+      Get a free key at
+      <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>
+    </p>
+  </div>
 
+  <!-- ── ✨ NEW: Protected Shows ──────────────────────────────────────── -->
+  <!--
+    This is the main new feature.
+    The user types a show or movie name they haven't watched yet.
+    The extension monitors all posts and blurs any that mention this show
+    AND contain spoiler content according to Gemini.
+  -->
+  <div class="section">
+    <span class="section-label shows">
+      🎬 Protected Shows
+      <span class="show-count" id="showCount">0</span>
+    </span>
+
+    <div class="input-row">
+      <input
+        type="text"
+        id="showInput"
+        class="show-input"
+        placeholder="e.g. Breaking Bad, Oppenheimer…"
+        maxlength="80"
+      />
+      <button class="btn-show" id="addShowBtn" title="Add show">+</button>
+    </div>
+
+    <!-- Show tags render here -->
+    <div class="tags" id="showList">
+      <span class="empty-state" id="showEmptyMsg">
+        No shows protected yet. Add a show above.
+      </span>
+    </div>
+  </div>
+  <!-- ── END Protected Shows ─────────────────────────────────────────── -->
+
+  <!-- ── Extra Keywords (optional fallback) ──────────────────────────── -->
+  <div class="section">
+    <span class="section-label">Extra Keywords <span style="color:var(--muted);font-size:9px">(optional)</span></span>
     <div class="input-row">
       <input type="text" id="keywordInput" placeholder="e.g. episode 10, finale…" maxlength="60" />
       <button id="addBtn" title="Add keyword">+</button>
     </div>
-
     <div class="tags" id="tagList">
-      <span class="empty-state" id="emptyMsg">No keywords yet. Add one above.</span>
+      <span class="empty-state" id="emptyMsg">No extra keywords added.</span>
     </div>
   </div>
 

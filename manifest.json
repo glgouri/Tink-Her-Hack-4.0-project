@@ -26,7 +26,8 @@
         "https://twitter.com/*",
         "https://x.com/*",
         "https://www.reddit.com/*",
-        "https://old.reddit.com/*"
+        "https://old.reddit.com/*",
+        "https://generativelanguage.googleapis.com/*"
       ],
       "js": ["content/content.js"],
       "css": ["styles/style.css"],
