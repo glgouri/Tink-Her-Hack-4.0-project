@@ -100,10 +100,13 @@ Whenever you modify the code:
 Go to chrome://extensions/
 Click the Reload button on the SpoilerShield extension.
 
-</h1>Team Members</h1>
+<h1>Demo Video Link</h1>
+https://drive.google.com/file/d/17EbktEgmNhUsPc-n9RzDSsazzRdzbg7H/view?usp=drive_link
 
-1.Gouri Lakshmi MS
-2.Anila Roy
+<h1>Team Members</h1>
+
+<li>1.Gouri Lakshmi MS</li>
+<li>2.Anila Roy</li>
 
 <h1>License info</h1>
 MIT License
