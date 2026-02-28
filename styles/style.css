@@ -1,0 +1,122 @@
+/**
+ * style.css – SpoilerShield Content Styles
+ *
+ * These styles are injected into every supported page by the content script.
+ * They handle:
+ *  1. The fullscreen spoiler overlay (#spoilershield-overlay)
+ *  2. The inner card (.ss-overlay-inner)
+ *
+ * Blur is applied inline via JavaScript so it can be easily toggled.
+ * The overlay uses position:fixed so it covers the viewport regardless of
+ * scroll position, without touching the browser chrome.
+ */
+
+/* ── Overlay Container ────────────────────────────────────────────────────── */
+#spoilershield-overlay {
+  /* Fixed covers the full viewport; z-index 2147483647 is the max value,
+     ensuring it sits above all page content but NOT the browser toolbar */
+  position: fixed;
+  inset: 0;                         /* shorthand for top/right/bottom/left: 0 */
+  z-index: 2147483647;
+
+  /* Semi-transparent dark backdrop with a subtle blur */
+  background: rgba(5, 5, 8, 0.88);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+
+  /* Flex-centre the inner card */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  /* Fade in */
+  animation: ss-fadeIn 0.35s ease both;
+}
+
+@keyframes ss-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Inner Card ───────────────────────────────────────────────────────────── */
+.ss-overlay-inner {
+  background: linear-gradient(145deg, #18181c 0%, #111114 100%);
+  border: 1px solid rgba(255, 75, 75, 0.35);
+  border-radius: 18px;
+  padding: 44px 52px;
+  text-align: center;
+  pointer-events: none; /* clicks pass through to parent overlay handler */
+
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 30px 80px rgba(0,0,0,0.7),
+    0 0 60px rgba(255,75,75,0.12);
+
+  animation: ss-slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.05s;
+
+  /* Prevent text selection on the card */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@keyframes ss-slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Shield Icon ──────────────────────────────────────────────────────────── */
+.ss-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 20px;
+  display: block;
+
+  /* Subtle pulse glow */
+  animation: ss-pulse 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px rgba(255, 75, 75, 0.5));
+}
+
+@keyframes ss-pulse {
+  0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 18px rgba(255,75,75,0.4)); }
+  50%       { transform: scale(1.08); filter: drop-shadow(0 0 28px rgba(255,75,75,0.7)); }
+}
+
+/* ── Title ────────────────────────────────────────────────────────────────── */
+.ss-title {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #f0f0f5;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+/* ── Subtitle ─────────────────────────────────────────────────────────────── */
+.ss-sub {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 75, 75, 0.85);
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* ── Hover Hint ───────────────────────────────────────────────────────────── */
+#spoilershield-overlay:hover .ss-overlay-inner {
+  border-color: rgba(255, 75, 75, 0.65);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06) inset,
+    0 30px 80px rgba(0,0,0,0.7),
+    0 0 80px rgba(255,75,75,0.22);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
