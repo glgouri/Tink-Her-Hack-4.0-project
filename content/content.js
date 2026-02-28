@@ -79,8 +79,8 @@ const PLATFORM_BLUR_SELECTORS = {
 };
 
 // ── Hardcoded Gemini credentials ──────────────────────────────────────────────
-const GEMINI_API_KEY = 'AIzaSyDrQoMIofukir-7X66tqWeCtwJmhwAaEmU';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_KEY = 'AIzaSyD3ZzkwGPZyrKdChe8OclF4_GO9pnXR3Zs';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const DEBOUNCE_DELAY = 400; // ms — collapses rapid mutation bursts into one scan
 
