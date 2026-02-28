@@ -1,261 +1,200 @@
-/**
- * popup/popup.js – SpoilerShield v3
- *
- * WHAT'S NEW IN V3
- * ────────────────────────────────────────────────────────────────────────
- * • `protectedShows` array — stores show/movie names the user wants shielded.
- * • addShow() / removeShow() / renderShows() — mirror the existing keyword
- *   CRUD pattern exactly, just saved under a different storage key.
- * • showCount badge updates live as shows are added/removed.
- * • All existing keyword + API key logic is UNCHANGED.
- */
-
 'use strict';
 
-// ── DOM Refs ───────────────────────────────────────────────────────────────
+const PLATFORMS = ['youtube', 'reddit', 'twitter'];
 
-// Existing
-const enabledToggle = document.getElementById('enabledToggle');
-const keywordInput  = document.getElementById('keywordInput');
-const addBtn        = document.getElementById('addBtn');
-const tagList       = document.getElementById('tagList');
-const emptyMsg      = document.getElementById('emptyMsg');
-const statusBar     = document.getElementById('statusBar');
-const apiKeyInput   = document.getElementById('apiKeyInput');
-const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-const toggleApiVis  = document.getElementById('toggleApiVis');
+// Per-platform state
+const state = {
+  shows:    { youtube: [], reddit: [], twitter: [] },
+  keywords: { youtube: [], reddit: [], twitter: [] },
+};
 
-// New in v3
-const showInput     = document.getElementById('showInput');
-const addShowBtn    = document.getElementById('addShowBtn');
-const showList      = document.getElementById('showList');
-const showEmptyMsg  = document.getElementById('showEmptyMsg');
-const showCount     = document.getElementById('showCount');
+let statusTimer = null;
 
-// ── State ──────────────────────────────────────────────────────────────────
-let keywords        = [];
-let protectedShows  = []; // e.g. ["breaking bad", "oppenheimer"]
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function titleCase(s) { return s.replace(/\b\w/g, c => c.toUpperCase()); }
+function platShort(p) { return p === 'youtube' ? 'yt' : p === 'reddit' ? 'rd' : 'tw'; }
 
-// ── Storage Helpers ────────────────────────────────────────────────────────
-
-/**
- * loadSettings()
- * Reads all persisted values from chrome.storage.sync and populates the UI.
- * Now also loads `protectedShows`.
- */
-async function loadSettings() {
-  try {
-    const data = await chrome.storage.sync.get({
-      keywords       : [],
-      enabled        : true,
-      geminiApiKey   : '',
-      protectedShows : [],   // ← new
-    });
-
-    keywords       = data.keywords;
-    protectedShows = data.protectedShows;
-
-    enabledToggle.checked = data.enabled;
-    if (apiKeyInput) apiKeyInput.value = data.geminiApiKey || '';
-
-    renderTags();
-    renderShows();   // ← new
-
-  } catch (err) {
-    showStatus('Error loading settings', false);
-    console.error('[SpoilerShield] loadSettings error:', err);
-  }
+function showStatus(msg, type) {
+  type = type || 'saved';
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status-bar ' + type;
+  document.getElementById('statusText').textContent = msg.toUpperCase();
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(function() {
+    bar.className = 'status-bar';
+    document.getElementById('statusText').textContent = 'READY';
+  }, 2000);
 }
 
-/**
- * saveSettings()
- * Persists keywords + enabled toggle.
- * Shows and API key have their own dedicated save calls.
- */
-async function saveSettings() {
-  try {
-    await chrome.storage.sync.set({ keywords, enabled: enabledToggle.checked });
-    showStatus('Saved ✓', true);
-  } catch (err) {
-    showStatus('Save failed', false);
-    console.error('[SpoilerShield] saveSettings error:', err);
-  }
+// ── Counts ───────────────────────────────────────────────────────────────────
+function updateCounts() {
+  var showTotal = 0, kwTotal = 0;
+  PLATFORMS.forEach(function(p) {
+    var ps = platShort(p);
+    var sn = state.shows[p].length;
+    var kn = state.keywords[p].length;
+    showTotal += sn; kwTotal += kn;
+    document.getElementById('show-' + ps + '-count').textContent = sn;
+    document.getElementById('kw-' + ps + '-count').textContent   = kn;
+  });
+  document.getElementById('showTotalCount').textContent = showTotal;
+  document.getElementById('kwTotalCount').textContent   = kwTotal;
 }
 
-/**
- * saveShows()
- * Persists the protectedShows array to chrome.storage.sync.
- * content.js listens via storage.onChanged and reacts immediately —
- * no page reload required.
- */
-async function saveShows() {
-  try {
-    await chrome.storage.sync.set({ protectedShows });
-    // No status flash here — renderShows() already gives visual feedback
-  } catch (err) {
-    showStatus('Save failed', false);
-    console.error('[SpoilerShield] saveShows error:', err);
-  }
-}
+// ── Render a single platform list ─────────────────────────────────────────────
+function renderList(section, plat) {
+  var isShows = section === 'shows';
+  var listEl  = document.getElementById((isShows ? 'show' : 'kw') + '-list-' + plat);
+  var items   = state[isShows ? 'shows' : 'keywords'][plat];
+  var ps      = platShort(plat);
+  var tagBase = isShows ? 'show-tag' : 'tag';
+  var delBase = isShows ? 'show-del' : 'tag-del';
 
-/**
- * saveApiKey()
- * Validates and saves the Gemini API key.
- */
-async function saveApiKey() {
-  const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-  if (!key) { showStatus('API key cannot be empty', false); return; }
-  if (!key.startsWith('AIza')) { showStatus('Key should start with "AIza"', false); return; }
-  try {
-    await chrome.storage.sync.set({ geminiApiKey: key });
-    showStatus('API key saved ✓', true);
-  } catch (err) {
-    showStatus('Save failed', false);
-    console.error('[SpoilerShield] saveApiKey error:', err);
-  }
-}
+  listEl.innerHTML = '';
 
-// ── Show CRUD ──────────────────────────────────────────────────────────────
-
-/**
- * addShow()
- * Reads the showInput value, validates it, adds to protectedShows, and saves.
- * Show names are stored lowercase for case-insensitive matching in content.js.
- */
-function addShow() {
-  const raw = showInput.value.trim().toLowerCase();
-  if (!raw) return;
-
-  if (protectedShows.includes(raw)) {
-    showStatus(`"${raw}" already protected`, false);
-    showInput.select();
+  if (!items.length) {
+    listEl.innerHTML = '<span class="empty-msg">no entries — add one above</span>';
+    updateCounts();
     return;
   }
 
-  protectedShows.push(raw);
-  showInput.value = '';
-  renderShows();
-  saveShows();
-  showStatus(`"${raw}" added ✓`, true);
-}
-
-/**
- * removeShow(index)
- * Removes a show by index from the array, re-renders, and saves.
- */
-function removeShow(index) {
-  const removed = protectedShows[index];
-  protectedShows.splice(index, 1);
-  renderShows();
-  saveShows();
-  showStatus(`"${removed}" removed`, true);
-}
-
-/**
- * renderShows()
- * Clears and re-draws all show tags in #showList.
- * Uses purple .show-tag chips to visually distinguish from keyword tags.
- * Also updates the live count badge.
- */
-function renderShows() {
-  // Remove existing show-tag elements
-  [...showList.querySelectorAll('.show-tag')].forEach(t => t.remove());
-
-  // Show/hide empty state message
-  showEmptyMsg.style.display = protectedShows.length === 0 ? 'block' : 'none';
-
-  // Update the count badge in the section label
-  if (showCount) showCount.textContent = protectedShows.length;
-
-  protectedShows.forEach((show, index) => {
-    const tag = document.createElement('span');
-    tag.className = 'show-tag';
-    tag.innerHTML = `
-      <span>🎬 ${escapeHtml(show)}</span>
-      <button class="show-del" data-index="${index}" title="Remove show">×</button>
-    `;
-    showList.appendChild(tag);
+  items.forEach(function(val, i) {
+    var tag = document.createElement('span');
+    tag.className = tagBase + ' ' + tagBase + '-' + ps;
+    var label = isShows ? ('🎬 ' + escapeHtml(titleCase(val))) : escapeHtml(val);
+    tag.innerHTML = '<span>' + label + '</span><button class="' + delBase + '" data-section="' + section + '" data-plat="' + plat + '" data-index="' + i + '" title="Remove">×</button>';
+    listEl.appendChild(tag);
   });
+
+  updateCounts();
 }
 
-// ── Keyword CRUD (unchanged from v2) ──────────────────────────────────────
-
-function renderTags() {
-  [...tagList.querySelectorAll('.tag')].forEach(t => t.remove());
-  emptyMsg.style.display = keywords.length === 0 ? 'block' : 'none';
-  keywords.forEach((kw, index) => {
-    const tag = document.createElement('span');
-    tag.className = 'tag';
-    tag.innerHTML = `
-      <span>${escapeHtml(kw)}</span>
-      <button class="tag-del" data-index="${index}" title="Remove">×</button>
-    `;
-    tagList.appendChild(tag);
-  });
+function renderAll() {
+  PLATFORMS.forEach(function(p) { renderList('shows', p); renderList('keywords', p); });
 }
 
-function addKeyword() {
-  const raw = keywordInput.value.trim().toLowerCase();
+// ── Add / Remove ──────────────────────────────────────────────────────────────
+function addItem(section, plat) {
+  var isShows = section === 'shows';
+  var input   = document.getElementById((isShows ? 'show' : 'kw') + '-input-' + plat);
+  var raw     = input.value.trim().toLowerCase();
   if (!raw) return;
-  if (keywords.includes(raw)) { showStatus('Already exists', false); keywordInput.select(); return; }
-  keywords.push(raw);
-  keywordInput.value = '';
-  renderTags();
-  saveSettings();
+
+  var arr = state[isShows ? 'shows' : 'keywords'][plat];
+  if (arr.includes(raw)) { showStatus('Already exists', 'error'); input.select(); return; }
+
+  arr.push(raw);
+  input.value = '';
+  renderList(section, plat);
+  persist();
+  showStatus('"' + raw + '" added', 'saved');
 }
 
-function removeKeyword(index) {
-  keywords.splice(index, 1);
-  renderTags();
-  saveSettings();
+function removeItem(section, plat, index) {
+  var isShows = section === 'shows';
+  var arr     = state[isShows ? 'shows' : 'keywords'][plat];
+  var removed = arr.splice(index, 1)[0];
+  renderList(section, plat);
+  persist();
+  showStatus('"' + removed + '" removed', 'saved');
 }
 
-// ── UI Helpers ─────────────────────────────────────────────────────────────
-
-let statusTimer = null;
-function showStatus(msg, success = true) {
-  statusBar.textContent = msg;
-  statusBar.className   = 'status' + (success ? ' saved' : ' error');
-  clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => {
-    statusBar.textContent = 'Ready';
-    statusBar.className   = 'status';
-  }, 1800);
+// ── Storage ───────────────────────────────────────────────────────────────────
+function persist() {
+  var payload = {
+    showsByPlatform:    state.shows,
+    keywordsByPlatform: state.keywords,
+    enabled:            document.getElementById('enabledToggle').checked,
+  };
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.sync.set(payload);
+    }
+  } catch (e) { showStatus('Save failed', 'error'); }
 }
 
-function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-  );
+function loadSettings() {
+  var defaults = {
+    showsByPlatform:    { youtube:[], reddit:[], twitter:[] },
+    keywordsByPlatform: { youtube:[], reddit:[], twitter:[] },
+    enabled: true,
+  };
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.sync.get(defaults, function(data) {
+        state.shows    = data.showsByPlatform;
+        state.keywords = data.keywordsByPlatform;
+        document.getElementById('enabledToggle').checked = data.enabled;
+        updateShieldState(data.enabled);
+        renderAll();
+      });
+    }
+  } catch (e) { showStatus('Load error', 'error'); }
 }
 
-// ── Event Listeners ────────────────────────────────────────────────────────
+// ── Shield toggle ─────────────────────────────────────────────────────────────
+function updateShieldState(on) {
+  document.getElementById('popupRoot').classList.toggle('shield-disabled', !on);
+}
 
-// Existing
-addBtn.addEventListener('click', addKeyword);
-keywordInput.addEventListener('keydown', e => { if (e.key === 'Enter') addKeyword(); });
-tagList.addEventListener('click', e => {
-  const del = e.target.closest('.tag-del');
-  if (del) removeKeyword(parseInt(del.dataset.index, 10));
-});
-enabledToggle.addEventListener('change', saveSettings);
-if (saveApiKeyBtn) saveApiKeyBtn.addEventListener('click', saveApiKey);
-if (apiKeyInput)   apiKeyInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveApiKey(); });
-if (toggleApiVis && apiKeyInput) {
-  toggleApiVis.addEventListener('click', () => {
-    const hidden = apiKeyInput.type === 'password';
-    apiKeyInput.type = hidden ? 'text' : 'password';
-    toggleApiVis.textContent = hidden ? '🙈' : '👁';
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function setupTabs(tabsId, panelsId) {
+  document.getElementById(tabsId).addEventListener('click', function(e) {
+    var tab = e.target.closest('.ptab');
+    if (!tab) return;
+    var plat = tab.dataset.plat;
+
+    document.getElementById(tabsId).querySelectorAll('.ptab').forEach(function(t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+
+    document.getElementById(panelsId).querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    document.getElementById(panelsId).querySelector('[data-plat="' + plat + '"]').classList.add('active');
   });
 }
 
-// New in v3 — show add/remove
-addShowBtn.addEventListener('click', addShow);
-showInput.addEventListener('keydown', e => { if (e.key === 'Enter') addShow(); });
-showList.addEventListener('click', e => {
-  const del = e.target.closest('.show-del');
-  if (del) removeShow(parseInt(del.dataset.index, 10));
+// ── Event delegation ──────────────────────────────────────────────────────────
+// Add buttons inside panels
+document.querySelectorAll('.tab-panels .btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var panel = btn.closest('.tab-panel');
+    if (!panel) return;
+    addItem(panel.dataset.section, panel.dataset.plat);
+  });
 });
 
-// ── Init ───────────────────────────────────────────────────────────────────
+// Enter key on inputs
+document.querySelectorAll('.cyber-input').forEach(function(input) {
+  input.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    var panel = input.closest('.tab-panel');
+    if (!panel) return;
+    addItem(panel.dataset.section, panel.dataset.plat);
+  });
+});
+
+// Delete — shows
+document.getElementById('showsSection').addEventListener('click', function(e) {
+  var del = e.target.closest('.show-del');
+  if (del) removeItem('shows', del.dataset.plat, parseInt(del.dataset.index, 10));
+});
+
+// Delete — keywords
+document.getElementById('keywordsSection').addEventListener('click', function(e) {
+  var del = e.target.closest('.tag-del');
+  if (del) removeItem('keywords', del.dataset.plat, parseInt(del.dataset.index, 10));
+});
+
+// Toggle
+document.getElementById('enabledToggle').addEventListener('change', function(e) {
+  updateShieldState(e.target.checked);
+  persist();
+  showStatus(e.target.checked ? 'Shield active' : 'Shield offline', e.target.checked ? 'saved' : 'error');
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+setupTabs('showTabs', 'show-panels');
+setupTabs('kwTabs',   'kw-panels');
 loadSettings();

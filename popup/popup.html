@@ -48,7 +48,6 @@
     position: relative;
   }
 
-  /* Grid BG */
   body::before {
     content: '';
     position: fixed; inset: 0;
@@ -74,7 +73,6 @@
 
   .popup-wrap { position: relative; z-index: 1; display: flex; flex-direction: column; }
 
-  /* ── Header ── */
   .header {
     padding: 16px 20px 13px;
     background: linear-gradient(180deg, rgba(0,240,255,0.05) 0%, transparent 100%);
@@ -111,7 +109,6 @@
   }
   .logo-ver { font-family: var(--font-mono); font-size: 8px; color: var(--text2); letter-spacing: 0.1em; margin-top: 3px; }
 
-  /* Toggle */
   .toggle-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
   .toggle-label { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.15em; color: var(--text2); text-transform: uppercase; }
   .toggle { position: relative; width: 44px; height: 22px; }
@@ -135,7 +132,6 @@
     transform: translateX(22px); background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
   }
 
-  /* ── Section Block ── */
   .section { border-bottom: 1px solid var(--border); position: relative; }
 
   .section-head {
@@ -157,7 +153,6 @@
   .badge-purple { background: var(--purple-glow); border: 1px solid var(--purple-dim); color: var(--purple); }
   .badge-cyan   { background: var(--cyan-glow);   border: 1px solid var(--cyan-dim);   color: var(--cyan); }
 
-  /* ── Platform Tabs ── */
   .platform-tabs {
     display: flex; gap: 0;
     padding: 10px 20px 0;
@@ -196,13 +191,11 @@
   .ptab[data-plat="reddit"].active  .ptab-count { background: var(--rd-glow); border-color: rgba(255,101,48,0.3); color: var(--rd); }
   .ptab[data-plat="twitter"].active .ptab-count { background: var(--tw-glow); border-color: rgba(29,155,240,0.3); color: var(--tw); }
 
-  /* ── Tab Panels ── */
   .tab-panels { padding: 12px 20px 14px; }
   .tab-panel { display: none; animation: panelFade 0.18s ease both; }
   .tab-panel.active { display: block; }
   @keyframes panelFade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* ── Input Row ── */
   .input-row { display: flex; gap: 6px; margin-bottom: 10px; }
 
   .cyber-input {
@@ -226,7 +219,6 @@
     box-shadow: 0 0 0 1px rgba(29,155,240,0.15), 0 0 14px rgba(29,155,240,0.07);
   }
 
-  /* ── Buttons ── */
   .btn {
     font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
     text-transform: uppercase; border: none; border-radius: 4px;
@@ -246,7 +238,6 @@
   .btn-tw { background: rgba(29,155,240,0.1);  border: 1px solid rgba(29,155,240,0.4);  color: var(--tw); }
   .btn-tw:hover { background: rgba(29,155,240,0.19); border-color: var(--tw); box-shadow: 0 0 12px rgba(29,155,240,0.25); transform: translateY(-1px); }
 
-  /* ── Tags ── */
   .tag-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 14px; }
   .empty-msg { font-family: var(--font-mono); font-size: 9px; color: var(--text2); letter-spacing: 0.07em; font-style: italic; }
 
@@ -269,7 +260,6 @@
   }
   .tag-del:hover, .show-del:hover { opacity: 1; color: var(--red); }
 
-  /* ── Status Bar ── */
   .status-bar {
     padding: 8px 20px; background: var(--bg1);
     border-top: 1px solid var(--border);
@@ -349,7 +339,6 @@
     </div>
 
     <div class="tab-panels" id="show-panels">
-      <!-- YouTube -->
       <div class="tab-panel active" data-plat="youtube" data-section="shows">
         <div class="input-row">
           <input class="cyber-input" id="show-input-youtube" type="text"
@@ -360,7 +349,6 @@
           <span class="empty-msg">no shows — add one above</span>
         </div>
       </div>
-      <!-- Reddit -->
       <div class="tab-panel" data-plat="reddit" data-section="shows">
         <div class="input-row">
           <input class="cyber-input" id="show-input-reddit" type="text"
@@ -371,7 +359,6 @@
           <span class="empty-msg">no shows — add one above</span>
         </div>
       </div>
-      <!-- Twitter -->
       <div class="tab-panel" data-plat="twitter" data-section="shows">
         <div class="input-row">
           <input class="cyber-input" id="show-input-twitter" type="text"
@@ -408,7 +395,6 @@
     </div>
 
     <div class="tab-panels" id="kw-panels">
-      <!-- YouTube -->
       <div class="tab-panel active" data-plat="youtube" data-section="kw">
         <div class="input-row">
           <input class="cyber-input" id="kw-input-youtube" type="text"
@@ -419,7 +405,6 @@
           <span class="empty-msg">no keywords — add one above</span>
         </div>
       </div>
-      <!-- Reddit -->
       <div class="tab-panel" data-plat="reddit" data-section="kw">
         <div class="input-row">
           <input class="cyber-input" id="kw-input-reddit" type="text"
@@ -430,7 +415,6 @@
           <span class="empty-msg">no keywords — add one above</span>
         </div>
       </div>
-      <!-- Twitter -->
       <div class="tab-panel" data-plat="twitter" data-section="kw">
         <div class="input-row">
           <input class="cyber-input" id="kw-input-twitter" type="text"
@@ -456,217 +440,8 @@
   </div>
 
 </div>
-<script>
-'use strict';
 
-const PLATFORMS = ['youtube', 'reddit', 'twitter'];
-
-// Per-platform state
-const state = {
-  shows:    { youtube: [], reddit: [], twitter: [] },
-  keywords: { youtube: [], reddit: [], twitter: [] },
-};
-
-let statusTimer = null;
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function titleCase(s) { return s.replace(/\b\w/g, c => c.toUpperCase()); }
-function platShort(p) { return p === 'youtube' ? 'yt' : p === 'reddit' ? 'rd' : 'tw'; }
-
-function showStatus(msg, type = 'saved') {
-  const bar = document.getElementById('statusBar');
-  bar.className = 'status-bar ' + type;
-  document.getElementById('statusText').textContent = msg.toUpperCase();
-  clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => {
-    bar.className = 'status-bar';
-    document.getElementById('statusText').textContent = 'READY';
-  }, 2000);
-}
-
-// ── Counts ───────────────────────────────────────────────────────────────────
-function updateCounts() {
-  let showTotal = 0, kwTotal = 0;
-  PLATFORMS.forEach(p => {
-    const ps = platShort(p);
-    const sn = state.shows[p].length;
-    const kn = state.keywords[p].length;
-    showTotal += sn; kwTotal += kn;
-    document.getElementById(`show-${ps}-count`).textContent = sn;
-    document.getElementById(`kw-${ps}-count`).textContent   = kn;
-  });
-  document.getElementById('showTotalCount').textContent = showTotal;
-  document.getElementById('kwTotalCount').textContent   = kwTotal;
-}
-
-// ── Render a single platform list ─────────────────────────────────────────────
-function renderList(section, plat) {
-  const isShows = section === 'shows';
-  const listEl  = document.getElementById(`${isShows ? 'show' : 'kw'}-list-${plat}`);
-  const items   = state[isShows ? 'shows' : 'keywords'][plat];
-  const ps      = platShort(plat);
-  const tagBase = isShows ? 'show-tag' : 'tag';
-  const delBase = isShows ? 'show-del' : 'tag-del';
-
-  listEl.innerHTML = '';
-
-  if (!items.length) {
-    listEl.innerHTML = '<span class="empty-msg">no entries — add one above</span>';
-    updateCounts();
-    return;
-  }
-
-  items.forEach((val, i) => {
-    const tag   = document.createElement('span');
-    tag.className = `${tagBase} ${tagBase}-${ps}`;
-    const label = isShows ? `🎬 ${escapeHtml(titleCase(val))}` : escapeHtml(val);
-    tag.innerHTML = `<span>${label}</span><button class="${delBase}" data-section="${section}" data-plat="${plat}" data-index="${i}" title="Remove">×</button>`;
-    listEl.appendChild(tag);
-  });
-
-  updateCounts();
-}
-
-function renderAll() {
-  PLATFORMS.forEach(p => { renderList('shows', p); renderList('keywords', p); });
-}
-
-// ── Add / Remove ──────────────────────────────────────────────────────────────
-function addItem(section, plat) {
-  const isShows = section === 'shows';
-  const input   = document.getElementById(`${isShows ? 'show' : 'kw'}-input-${plat}`);
-  const raw     = input.value.trim().toLowerCase();
-  if (!raw) return;
-
-  const arr = state[isShows ? 'shows' : 'keywords'][plat];
-  if (arr.includes(raw)) { showStatus('Already exists', 'error'); input.select(); return; }
-
-  arr.push(raw);
-  input.value = '';
-  renderList(section, plat);
-  persist();
-  showStatus(`"${raw}" added`, 'saved');
-}
-
-function removeItem(section, plat, index) {
-  const isShows = section === 'shows';
-  const arr     = state[isShows ? 'shows' : 'keywords'][plat];
-  const removed = arr.splice(index, 1)[0];
-  renderList(section, plat);
-  persist();
-  showStatus(`"${removed}" removed`, 'saved');
-}
-
-// ── Storage ───────────────────────────────────────────────────────────────────
-async function persist() {
-  const payload = {
-    showsByPlatform:    state.shows,
-    keywordsByPlatform: state.keywords,
-    enabled:            document.getElementById('enabledToggle').checked,
-  };
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      await chrome.storage.sync.set(payload);
-    } else {
-      localStorage.setItem('ss_v3', JSON.stringify(payload));
-    }
-  } catch (e) { showStatus('Save failed', 'error'); }
-}
-
-async function loadSettings() {
-  const defaults = {
-    showsByPlatform:    { youtube:[], reddit:[], twitter:[] },
-    keywordsByPlatform: { youtube:[], reddit:[], twitter:[] },
-    enabled: true,
-  };
-  try {
-    let data;
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      data = await chrome.storage.sync.get(defaults);
-    } else {
-      const raw = localStorage.getItem('ss_v3');
-      data = raw ? {...defaults, ...JSON.parse(raw)} : defaults;
-    }
-    state.shows    = data.showsByPlatform;
-    state.keywords = data.keywordsByPlatform;
-    document.getElementById('enabledToggle').checked = data.enabled;
-    updateShieldState(data.enabled);
-    renderAll();
-  } catch (e) { showStatus('Load error', 'error'); }
-}
-
-// ── Shield toggle ─────────────────────────────────────────────────────────────
-function updateShieldState(on) {
-  document.getElementById('popupRoot').classList.toggle('shield-disabled', !on);
-}
-
-// ── Tab switching ─────────────────────────────────────────────────────────────
-function setupTabs(tabsId, panelsId) {
-  document.getElementById(tabsId).addEventListener('click', e => {
-    const tab = e.target.closest('.ptab');
-    if (!tab) return;
-    const plat = tab.dataset.plat;
-
-    document.getElementById(tabsId).querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-
-    document.getElementById(panelsId).querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById(panelsId).querySelector(`[data-plat="${plat}"]`).classList.add('active');
-  });
-}
-
-// ── Event delegation ──────────────────────────────────────────────────────────
-// Add buttons inside panels
-document.querySelectorAll('.tab-panels .btn').forEach(btn => {
-  btn.addEventListener('click', () => addItem(btn.dataset.section, btn.dataset.plat));
-});
-
-// Enter key on inputs
-document.querySelectorAll('.cyber-input').forEach(input => {
-  input.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    const panel = input.closest('.tab-panel');
-    if (!panel) return;
-    addItem(panel.dataset.section, panel.dataset.plat);
-  });
-});
-
-// Delete — shows
-document.getElementById('showsSection').addEventListener('click', e => {
-  const del = e.target.closest('.show-del');
-  if (del) removeItem('shows', del.dataset.plat, +del.dataset.index);
-});
-
-// Delete — keywords
-document.getElementById('keywordsSection').addEventListener('click', e => {
-  const del = e.target.closest('.tag-del');
-  if (del) removeItem('keywords', del.dataset.plat, +del.dataset.index);
-});
-
-// Toggle
-document.getElementById('enabledToggle').addEventListener('change', e => {
-  updateShieldState(e.target.checked);
-  persist();
-  showStatus(e.target.checked ? 'Shield active' : 'Shield offline', e.target.checked ? 'saved' : 'error');
-});
-
-// ── Init tabs ─────────────────────────────────────────────────────────────────
-setupTabs('showTabs',   'show-panels');
-setupTabs('kwTabs',     'kw-panels');
-
-// ── Demo data (remove in production) ─────────────────────────────────────────
-state.shows.youtube    = ['breaking bad', 'house of dragon'];
-state.shows.reddit     = ['succession'];
-state.shows.twitter    = ['the bear', 'severance'];
-state.keywords.youtube = ['season finale', 'dies'];
-state.keywords.reddit  = ['spoiler', 'plot twist'];
-state.keywords.twitter = ['leaked'];
-renderAll();
-
-// In real extension: loadSettings();
-</script>
+<!-- ✅ All JS is in the external file — no inline scripts -->
+<script src="popup.js"></script>
 </body>
 </html>
